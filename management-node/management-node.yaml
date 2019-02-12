@@ -1,0 +1,60 @@
+## basic_config common for all parts of the 
+# solution 
+basic_config:
+  # level of the information messages to be shown
+  # debug
+  # fatal
+  # info 
+  # error 
+  # more information can be found here
+  # https://github.com/sirupsen/logrus 
+  log_level: debug
+
+  # path of the log file where to store log 
+  log_path: log.log
+
+  # path of the tmp file storage 
+  tmp_path: .
+
+# specific solution's part configuration 
+
+## rpc connection timeouts configuration
+# listening_address determines on which address and port
+# management node will be listening incoming connections 
+listening_address: 127.0.0.1:1234
+
+# ping_timer is period in seconds for sending ping to 
+# worker node
+ping_timer: 5
+
+# max timeout that server waits for any message to be received or send 
+# if timeout expired connection is dropped 
+# silence_timeout has to be >= ping_timeout
+# timeout is in seconds 
+silence_timeout: 10
+
+
+## etcd connection configuration
+
+# the address of the etcd node that is used to store 
+# information about worker nodes and scheduled tasks  
+etcd_address: 172.17.0.2:2379
+
+# timeout in seconds that is used for etcd connection
+dial_timeout: 10
+
+
+## scheduler configuration
+
+# algorithm that is used for scheduling tasks
+# can be:
+        # rr - round-robin
+            # scheduler schedules task one by on all available worker nodes
+        # rand - rand
+            # scheduler randomly picks the node where to schedule the task
+scheduler_algo: rr
+
+# timer that is used to change the state of the task
+# when the timer is expired task state changed to dead
+# timer in seconds
+dead_timeout: 60
