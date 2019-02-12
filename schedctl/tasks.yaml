@@ -1,0 +1,12 @@
+# example of possible task list
+
+# tasks array 
+tasks:
+  # task contains cmd descriptor
+  - cmd: sleep
+  # and array of parameters
+    params: 
+      - "30"
+  - cmd: sleep
+    params: 
+      - "30"

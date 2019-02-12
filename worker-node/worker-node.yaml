@@ -1,0 +1,24 @@
+# basic_config common for all parts of the 
+# solution 
+basic_config:
+  # level of the information messages to be shown
+  # debug
+  # fatal
+  # info 
+  # error 
+  # more information can be found here
+  # https://github.com/sirupsen/logrus 
+  log_level: debug
+
+  # path of the log file where to store log 
+  log_path: log.log
+
+  # path of the tmp file storage 
+  tmp_path: .
+
+# specific solution's part configuration 
+
+server_address: 127.0.0.1:1234
+
+# timeout in seconds that is used for etcd connection
+dial_timeout: 5  
