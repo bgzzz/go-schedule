@@ -39,6 +39,8 @@ func parseCmd(target string, args []string) error {
 			fmt.Println(UsageWorkers)
 		case TasksCmd:
 			fmt.Println(UsageTasks)
+		default:
+			return fmt.Errorf("Unsupported target %s", target)
 		}
 		return nil
 	}

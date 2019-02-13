@@ -19,6 +19,8 @@ type Task struct {
 	stop chan struct{}
 }
 
+//TBD: Add new task function
+
 // StartDeadTimeout start timeout
 // and runs cb when expired
 func (t *Task) StartDeadTimeout(cb func()) {
@@ -42,7 +44,6 @@ func (t *Task) StartDeadTimeout(cb func()) {
 
 // StopDeadTimeout stops dead timeout for task
 func (t *Task) StopDeadTimeout() {
-	t.deadTimer.Stop()
 	select {
 	case t.stop <- struct{}{}:
 		{
