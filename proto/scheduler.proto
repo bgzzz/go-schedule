@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package proto;
+
+service Scheduler {
+  // RPC is called while worker node connects to management node
+  // Management node talks to the worker nodes via management 
+  // request messages (MgmtReq)
+  // Worker nodes reply with WorkerRsp messages
+  rpc WorkerConnect(stream WorkerRsp) returns (stream MgmtReq) {}
+
+  // RPC is called by ctl utility 
+  // It returns the list of nodes that are in touch with management node
+  // could be change to stream in future (list might be quite long)  
+  rpc GetWorkerList(DummyReq) returns (WorkerNodeList) {}
+
+
+  // RPC is called by ctl utility 
+  // It returns the list of tasks that were run and 
+  // are running on the worker nodes
+  // could be changed to stream in future (list might be quite long)
+  rpc GetTaskList(DummyReq) returns (TaskList) {}
+
+
+  // RPC is called by ctl utility to execute TaskList  
+  // on the WorkerNode cluster  
+  // It returns the list of tasks that were distributed over the 
+  // cluster of WorkerNode
+  rpc Schedule(TaskList) returns (TaskList) {}
+
+
+  // RPC is called by worker node when the task state is changed
+  // Management node saves the state to db 
+  // RPC returns empty message  
+  rpc SetTaskState(Task) returns (Empty) {}
+}
+
+message MgmtReq {
+  // uuid string is the value of id
+  // rsp to this request contains same id 
+  string id = 1;
+
+  // rpc method that is called on the worker node side 
+  string method = 2;
+
+  // string of parameters 
+  repeated string params = 3;
+}
+
+message WorkerRsp {
+  // id of the request to which rsp belongs to
+  string id = 1;
+
+  // reply in string format 
+  string reply = 2;  
+}
+
+message TaskList {
+  repeated Task tasks = 1;
+}
+
+message Task {
+  string id = 1;
+  
+  string cmd = 2;
+
+  repeated string parameters = 3; 
+
+  string state = 4;
+
+  string stdout = 5;
+
+  string stderr = 6;
+
+  string workerId = 7;
+
+  string workerError = 8;
+}
+
+//message WorkerNodeListReq {
+//  string id = 1;
+//}
+
+message WorkerNodeList {
+  repeated WorkerNode nodes = 1;
+}
+
+
+
+message WorkerNode {
+  string id = 1;
+  
+  string address = 2;
+
+  string state = 3;
+
+  int64 ntasks = 4;
+}
+
+message DummyReq {
+  string id = 1;
+}
+
+message Empty {
+  
+}
