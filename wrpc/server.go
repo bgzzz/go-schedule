@@ -102,12 +102,12 @@ func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
 
 				rsp := &pb.WorkerRsp{
 					Id:    req.Id,
-					Reply: "scheduled",
+					Reply: common.TaskStateScheduled,
 				}
 
 				wrpc.Send(rsp)
 
-				go wrpc.execute(req)
+				wrpc.execute(req)
 
 			}()
 
@@ -118,7 +118,7 @@ func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
 			go func() {
 				rsp := &pb.WorkerRsp{
 					Id:    req.Id,
-					Reply: "pong",
+					Reply: common.WorkerNodeRPCPingReply,
 				}
 				wrpc.Send(rsp)
 			}()
