@@ -55,12 +55,6 @@ func ScheduleTasks(args []string) error {
 		return err
 	}
 
-	if len(args) < 2 {
-		err := fmt.Errorf("Tasks file path is not defined")
-		log.Error(err.Error())
-		return err
-	}
-
 	tl, err := ParseTasksFile(args[1])
 	if err != nil {
 		log.Error(err.Error())
@@ -69,7 +63,7 @@ func ScheduleTasks(args []string) error {
 
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			5*time.Second)
+			time.Duration(Config.ConnectionTimeout)*time.Second)
 
 		log.Debug("Calling Schedule RPC")
 		tl, err := client.Schedule(ctx, tl)
@@ -91,7 +85,7 @@ func ScheduleTasks(args []string) error {
 func ListTasks() error {
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			5*time.Second)
+			time.Duration(Config.ConnectionTimeout)*time.Second)
 
 		log.Debug("Calling ListTasks RPC")
 		tl, err := client.GetTaskList(ctx, &pb.DummyReq{
@@ -118,7 +112,7 @@ func ListTasks() error {
 func ListWorkers() error {
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			5*time.Second)
+			time.Duration(Config.ConnectionTimeout)*time.Second)
 
 		log.Debug("Calling ListWorkers RPC")
 		wl, err := client.GetWorkerList(ctx, &pb.DummyReq{
