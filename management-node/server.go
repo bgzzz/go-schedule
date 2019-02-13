@@ -115,7 +115,6 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 	}
 
 	rsp := msg.(*pb.WorkerRsp)
-
 	wRPCClient.SetId(rsp.Reply)
 
 	err = mn.AddWorkerNode(wRPCClient)
@@ -237,7 +236,6 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 	var workers []string
 	for k, _ := range md.workerNodePool {
 		workers = append(workers, k)
-		fmt.Println(k)
 	}
 
 	// if no connected workers set state of tasks requested to schedule to
@@ -261,17 +259,13 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 
 	// msg type for internal use
 	type msg struct {
-		id  string
-		err error
-		rsp *pb.WorkerRsp
+		err  error
+		task *pb.Task
 	}
 
 	// channel for connecting onRsp handlers
 	// to the current go routine
 	messanger := make(chan msg, 1)
-
-	// task map is used for rsp handling
-	taskMap := map[string]*pb.Task{}
 
 	for i, task := range req.Tasks {
 
@@ -296,17 +290,28 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		task.Id = id
 		task.State = common.TaskStatePending
 		task.WorkerId = workerId
+
 		if err := md.SetToDb(task, EtcdTaskPrefix+id); err != nil {
 			log.Error(err.Error())
 			return nil, err
 		}
 
-		taskMap[task.Id] = task
-
+		// setup handlers
+		// copy object to handler
+		t := *task
 		onRspHandler := func(rsp *pb.WorkerRsp) {
+
+			// TBD: validate reply
+
+			t.State = rsp.Reply
+			var err error
+			if err = md.SetToDb(&t, EtcdTaskPrefix+t.Id); err != nil {
+				log.Error(err.Error())
+			}
+
 			messanger <- msg{
-				id:  rsp.Id,
-				rsp: rsp,
+				task: &t,
+				err:  err,
 			}
 		}
 
@@ -314,59 +319,55 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 			err := fmt.Errorf("timer is expired for rsp on task %s", task.Id)
 			log.Error(err.Error())
 			messanger <- msg{
-				id:  task.Id,
-				err: err,
+				err:  err,
+				task: &t,
 			}
 		}
 
+		// combine parameters with cmd definition
+		params := append([]string{task.Cmd}, task.Parameters...)
+
+		// prepare request
 		req := pb.MgmtReq{
 			Id:     task.Id,
 			Method: common.WorkerNodeRPCExec,
-			Params: task.Parameters,
-		}
-
-		// non blocking send
-		md.workerNodePool[workerId].
-			SendWithHandlerTimeout(req, onRspHandler,
-				onTimerExpiredHandler,
-				time.Duration(Config.SilenceTimeout))
-	}
-
-	tasks := []*pb.Task{}
-
-	for _ = range req.Tasks {
-		m := <-messanger
-
-		// message id is the same as task.id
-		task := taskMap[m.id]
-
-		// check if it responded with error
-		if m.err != nil {
-			log.Error(m.err)
-			task.WorkerError = m.err.Error()
-			if err := md.SetToDb(task, EtcdTaskPrefix+m.id); err != nil {
-				log.Error(err.Error())
-				return nil, err
-			}
-			tasks = append(tasks, task)
-			continue
-		}
-
-		// check the reply type
-		// TBD: validate reply
-		task.State = m.rsp.Reply
-		if err := md.SetToDb(task, EtcdTaskPrefix+m.id); err != nil {
-			log.Error(err.Error())
-			return nil, err
+			Params: params,
 		}
 
 		// task is scheduled
 		// setup dead timeout
 		md.SetTaskAndRunDeadTimeout(&Task{
 			task: task,
+			stop: make(chan struct{}, 1),
 		})
 
-		tasks = append(tasks, task)
+		// sending to worker node
+		md.workerNodePool[workerId].
+			SendWithHandlerTimeout(req, onRspHandler,
+				onTimerExpiredHandler,
+				time.Duration(Config.SilenceTimeout))
+	}
+
+	// prepare task objects to response to schedctl
+	tasks := []*pb.Task{}
+	for _ = range req.Tasks {
+		m := <-messanger
+
+		// check if it responded with error
+		if m.err != nil {
+			log.Error(m.err)
+
+			// set error to worker error field
+			m.task.WorkerError = m.err.Error()
+			if err := md.SetToDb(m.task, EtcdTaskPrefix+m.task.Id); err != nil {
+				log.Error(err.Error())
+				return nil, err
+			}
+			tasks = append(tasks, m.task)
+			continue
+		}
+
+		tasks = append(tasks, m.task)
 	}
 
 	close(messanger)
@@ -501,6 +502,7 @@ func (md *ManagementNode) SetTaskAndRunDeadTimeout(t *Task) {
 // StopTaskDeadTimeout stops the dead timeout of the task
 // with id
 func (md *ManagementNode) StopTaskDeadTimeout(id string) error {
+
 	md.scheduledTasksMtx.RLock()
 	md.scheduledTasksMtx.RUnlock()
 

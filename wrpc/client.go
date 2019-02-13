@@ -152,7 +152,7 @@ func (wn *WorkerRPCClient) InitLoop() error {
 }
 
 func (wn *WorkerRPCClient) SetId(id string) {
-	wn.id = id
+	wn.WN.Id = id
 }
 
 // StartPinger setups ticker and sends ping to worker on
