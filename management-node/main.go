@@ -23,6 +23,8 @@ const (
 func main() {
 
 	filePath := flag.String("f", DefaultCfgFilePath, "-f management-node-cfg.yaml, provides config file path")
+	verbose := flag.Bool("v", false, "-v , verbose all the output: equal to debug in config file")
+
 	flag.Parse()
 
 	err := parseCfgFile(*filePath)
@@ -31,7 +33,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = common.InitLogging(Config.BasicConfig.LogLvl, Config.BasicConfig.LogPath)
+	if *verbose {
+		Config.BasicConfig.LogLvl = "debug"
+	}
+
+	err = common.InitLogging(&Config.BasicConfig)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(2)
@@ -76,7 +82,7 @@ func main() {
 	pb.RegisterSchedulerServer(s, mn)
 
 	go func() {
-		log.Info("Start serving on %s", Config.ListeningAddress)
+		log.Infof("Start serving on %s", Config.ListeningAddress)
 		if err := s.Serve(lis); err != nil {
 			log.Errorf("Failed to serve on %s: %s", Config.ListeningAddress, err.Error())
 			os.Exit(6)

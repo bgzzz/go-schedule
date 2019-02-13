@@ -27,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = common.InitLogging(Config.BasicConfig.LogLvl, Config.BasicConfig.LogPath)
+	err = common.InitLogging(&Config.BasicConfig)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(2)
@@ -35,7 +35,6 @@ func main() {
 
 	// Set up a connection to the server.
 
-	// refactor it to on function
 	conn, err := grpc.Dial(Config.ServerAddress, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)

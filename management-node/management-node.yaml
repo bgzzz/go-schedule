@@ -10,7 +10,12 @@ basic_config:
   # https://github.com/sirupsen/logrus 
   log_level: debug
 
+  # set the output to stdout
+  stdout: true 
+
   # path of the log file where to store log 
+  # if stdout set to true then log is written 
+  # both to stdout and file  
   log_path: log.log
 
   # path of the tmp file storage 
