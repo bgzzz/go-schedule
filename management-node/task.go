@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	pb "github.com/bgzzz/go-schedule/proto"
@@ -25,7 +24,6 @@ type Task struct {
 // StartDeadTimeout start timeout
 // and runs cb when expired
 func (t *Task) StartDeadTimeout(cb func()) {
-	fmt.Println("START DEAD")
 	t.deadTimer = time.NewTimer(time.Duration(Config.DeadTimeout) * time.Second)
 	go func() {
 		select {
