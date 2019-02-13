@@ -1,4 +1,4 @@
-# basic_config common for all parts of the 
+## basic_config common for all parts of the 
 # solution 
 basic_config:
   # level of the information messages to be shown
@@ -10,7 +10,12 @@ basic_config:
   # https://github.com/sirupsen/logrus 
   log_level: debug
 
+  # set the output to stdout
+  stdout: true 
+
   # path of the log file where to store log 
+  # if stdout set to true then log is written 
+  # both to stdout and file  
   log_path: log.log
 
   # path of the tmp file storage 
@@ -20,5 +25,13 @@ basic_config:
 
 server_address: 127.0.0.1:1234
 
-# timeout in seconds that is used for etcd connection
-dial_timeout: 5  
+# max timeout that server waits for any message to be received or send 
+# if timeout expired connection is dropped 
+# silence_timeout has to be >= ping_timeout
+# timeout is in seconds 
+silence_timeout: 10
+
+# timeout in seconds that is used for connection to
+# management node with non bidirectional stream 
+# connections
+connection_timeout: 5  

@@ -101,12 +101,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	logLvl := Config.BasicConfig.LogLvl
 	if *verbose {
-		logLvl = "debug"
+		Config.BasicConfig.LogLvl = "debug"
 	}
 
-	err = common.InitLogging(logLvl, Config.BasicConfig.LogPath)
+	err = common.InitLogging(&Config.BasicConfig)
 	if err != nil {
 		if *verbose {
 			fmt.Println(err.Error())

@@ -6,6 +6,7 @@ package common
 type Config struct {
 	LogLvl  string `yaml:"log_level"`
 	LogPath string `yaml:"log_path"`
+	Stdout  bool   `yaml:"stdout"`
 
 	TmpFolderPath string `yaml:"tmp_path"`
 }
