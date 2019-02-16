@@ -28,7 +28,7 @@ func fileCheck(cmd string) bool {
 
 // parseCmd parses cmd arguments and call specific
 // gRPCs
-func parseCmd(target string, args []string) error {
+func parseCmd(target string, args []string, cfg *SchedCtlConfig) error {
 
 	if len(args) == 0 {
 		return trace.Errorf("There is no parameters of the cmd %s", target)
@@ -49,15 +49,15 @@ func parseCmd(target string, args []string) error {
 	var err error
 	switch args[0] {
 	case WorkersCmd:
-		err = parseCmd(WorkersCmd, args[1:])
+		err = parseCmd(WorkersCmd, args[1:], cfg)
 	case TasksCmd:
-		err = parseCmd(TasksCmd, args[1:])
+		err = parseCmd(TasksCmd, args[1:], cfg)
 	case LsCmd:
 		switch target {
 		case WorkersCmd:
-			err = ListWorkers()
+			err = ListWorkers(cfg)
 		case TasksCmd:
-			err = ListTasks()
+			err = ListTasks(cfg)
 		default:
 			err = fmt.Errorf("Wrong target for ls (%s)", target)
 		}
@@ -67,7 +67,7 @@ func parseCmd(target string, args []string) error {
 			break
 		}
 
-		err = ScheduleTasks(args[1:])
+		err = ScheduleTasks(args[1:], cfg)
 	default:
 		err = fmt.Errorf("Wrong cmd paramater (%s)", args[0])
 	}

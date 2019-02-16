@@ -11,7 +11,7 @@ import (
 	"github.com/gravitational/trace"
 )
 
-func RunWorkerRPCServer(client pb.SchedulerClient) error {
+func RunWorkerRPCServer(client pb.SchedulerClient, cfg *WorkerNodeConfig) error {
 
 	ctx := context.Background()
 
@@ -20,11 +20,11 @@ func RunWorkerRPCServer(client pb.SchedulerClient) error {
 		return trace.Wrap(err)
 	}
 
-	// for now generatin uuid
+	// for now generating uuid
 	// has to be fixed in future
 	id := uuid.New().String()
 
-	wRPCServer := wrpc.NewWorkerNodeRPCServer(id, stream, client, Config.SilenceTimeout)
+	wRPCServer := wrpc.NewWorkerNodeRPCServer(id, stream, client, cfg.SilenceTimeout)
 
 	wRPCServer.StartSender()
 

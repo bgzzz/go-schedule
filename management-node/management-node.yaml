@@ -46,7 +46,7 @@ silence_timeout: 10
 etcd_address: 172.17.0.2:2379
 
 # timeout in seconds that is used for etcd connection
-dial_timeout: 10
+etcd_dial_timeout: 10
 
 
 ## scheduler configuration

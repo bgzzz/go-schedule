@@ -1,15 +1,15 @@
 package main
 
 import (
-	"github.com/bgzzz/go-schedule/common"
+	"io/ioutil"
+	"time"
 
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
+
+	"github.com/bgzzz/go-schedule/common"
 
 	"github.com/gravitational/trace"
 )
-
-var Config *SchedCtlConfig
 
 type SchedCtlConfig struct {
 	// BasicConfig config that is common for all parts
@@ -20,23 +20,22 @@ type SchedCtlConfig struct {
 	ServerAddress string `yaml:"server_address"`
 
 	// ConnectionTimeout is timeout for RPC call
-	ConnectionTimeout int `yaml:"connection_timeout"`
+	ConnectionTimeout time.Duration `yaml:"connection_timeout"`
 }
 
 // parseClientCfgFile parses the yaml file and
 // stores to global config variable
-func parseClientCfgFile(filePath string) error {
+func parseClientCfgFile(filePath string) (*SchedCtlConfig, error) {
 	dat, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return trace.Wrap(err)
+		return nil, trace.Wrap(err)
 	}
 
 	var cfg SchedCtlConfig
 	err = yaml.Unmarshal(dat, &cfg)
 	if err != nil {
-		return trace.Wrap(err)
+		return nil, trace.Wrap(err)
 	}
 
-	Config = &cfg
-	return nil
+	return &cfg, nil
 }

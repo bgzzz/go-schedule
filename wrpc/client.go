@@ -33,7 +33,7 @@ type WorkerRPCClient struct {
 func NewWorkerNodeRPCClient(id string,
 	stream pb.Scheduler_WorkerConnectServer,
 	wn *pb.WorkerNode,
-	silenceTimeout int) *WorkerRPCClient {
+	silenceTimeout time.Duration) *WorkerRPCClient {
 	return &WorkerRPCClient{
 		WN: wn,
 		Worker: &Worker{
@@ -42,7 +42,7 @@ func NewWorkerNodeRPCClient(id string,
 			streamClient:   nil,
 			send:           make(chan interface{}, 1),
 			stopSender:     make(chan struct{}, 1),
-			silenceTimeout: time.Duration(silenceTimeout),
+			silenceTimeout: silenceTimeout,
 		},
 		subscription: make(map[string]Callback),
 	}

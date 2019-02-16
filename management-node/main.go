@@ -26,34 +26,34 @@ func main() {
 
 	flag.Parse()
 
-	err := parseCfgFile(*filePath)
+	cfg, err := parseCfgFile(*filePath)
 	if err != nil {
 		common.PrintErr(err, *verbose, "")
 		os.Exit(1)
 	}
 
 	if *verbose {
-		Config.BasicConfig.LogLvl = "debug"
+		cfg.BasicConfig.LogLvl = "debug"
 	}
 
-	err = common.InitLogging(&Config.BasicConfig)
+	err = common.InitLogging(&cfg.BasicConfig)
 	if err != nil {
-		common.PrintErr(err, *verbose, Config.BasicConfig.LogLvl)
+		common.PrintErr(err, *verbose, cfg.BasicConfig.LogLvl)
 		os.Exit(2)
 	}
 
-	lis, err := net.Listen("tcp", Config.ListeningAddress)
+	lis, err := net.Listen("tcp", cfg.ListeningAddress)
 	if err != nil {
 		log.Error(err.Error())
 		os.Exit(3)
 	}
 
 	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{Config.EtcdAddress},
-		DialTimeout: time.Duration(Config.DialTimeout) * time.Second,
+		Endpoints:   []string{cfg.EtcdAddress},
+		DialTimeout: cfg.EtcdDialTimeout * time.Second,
 	})
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		os.Exit(4)
 	}
 
@@ -67,6 +67,7 @@ func main() {
 		etcd:           cli,
 		workerNodePool: make(map[string]*wrpc.WorkerRPCClient),
 		scheduledTasks: make(map[string]*Task),
+		cfg:            cfg,
 	}
 
 	// setting stated on db objects
@@ -74,16 +75,16 @@ func main() {
 	// workers have to be disconnected
 	err = mn.PrepareZeroState()
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		os.Exit(5)
 	}
 
 	pb.RegisterSchedulerServer(s, mn)
 
 	go func() {
-		log.Infof("Start serving on %s", Config.ListeningAddress)
+		log.Infof("Start serving on %s", cfg.ListeningAddress)
 		if err := s.Serve(lis); err != nil {
-			log.Errorf("Failed to serve on %s: %s", Config.ListeningAddress, err.Error())
+			log.Errorf("Failed to serve on %s: %s", cfg.ListeningAddress, err.Error())
 			os.Exit(6)
 		}
 	}()
