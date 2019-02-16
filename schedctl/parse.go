@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/gravitational/trace"
 )
 
 // helpCheck check if cmd is a help detective
@@ -29,8 +31,7 @@ func fileCheck(cmd string) bool {
 func parseCmd(target string, args []string) error {
 
 	if len(args) == 0 {
-		err := fmt.Errorf("There is no parameters of the cmd %s", target)
-		return err
+		return trace.Errorf("There is no parameters of the cmd %s", target)
 	}
 
 	if helpCheck(args[0]) {
@@ -40,7 +41,7 @@ func parseCmd(target string, args []string) error {
 		case TasksCmd:
 			fmt.Println(UsageTasks)
 		default:
-			return fmt.Errorf("Unsupported target %s", target)
+			return trace.Errorf("Unsupported target %s", target)
 		}
 		return nil
 	}
@@ -71,5 +72,5 @@ func parseCmd(target string, args []string) error {
 		err = fmt.Errorf("Wrong cmd paramater (%s)", args[0])
 	}
 
-	return err
+	return trace.Wrap(err)
 }

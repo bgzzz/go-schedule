@@ -1,7 +1,6 @@
 package wrpc
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -9,6 +8,7 @@ import (
 	pb "github.com/bgzzz/go-schedule/proto"
 
 	"github.com/google/uuid"
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -135,9 +135,7 @@ func (wn *WorkerRPCClient) ProcessResponse(r interface{}) error {
 
 	call, ok := wn.subscription[rsp.Id]
 	if !ok {
-		err := fmt.Errorf("There is no handler for responce %s", rsp.Id)
-		log.Error(err)
-		return err
+		return trace.Errorf("There is no handler for responce %s", rsp.Id)
 	}
 
 	go call(rsp)
@@ -170,8 +168,7 @@ func (wn *WorkerRPCClient) StartPinger(d time.Duration) {
 			onRspHandler := func(rsp *pb.WorkerRsp) {
 
 				if rsp.Reply != common.WorkerNodeRPCPingReply {
-					err := fmt.Errorf("Wrong answer on ping with id %s", rsp.Id)
-					log.Error(err.Error())
+					err := trace.Errorf("Wrong answer on ping with id %s", rsp.Id)
 					wn.SetErr(err)
 					return
 				} else {
@@ -181,8 +178,7 @@ func (wn *WorkerRPCClient) StartPinger(d time.Duration) {
 			}
 
 			onTimerExpiredHandler := func() {
-				err := fmt.Errorf("pong is delayed for %s: closing connection for %s", req.Id, wn.WN.Id)
-				log.Error(err.Error())
+				err := trace.Errorf("pong is delayed for %s: closing connection for %s", req.Id, wn.WN.Id)
 				wn.SetErr(err)
 			}
 

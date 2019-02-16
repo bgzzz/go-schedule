@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"os"
 	"time"
@@ -29,7 +28,7 @@ func main() {
 
 	err := parseCfgFile(*filePath)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.PrintErr(err, *verbose, "")
 		os.Exit(1)
 	}
 
@@ -39,7 +38,7 @@ func main() {
 
 	err = common.InitLogging(&Config.BasicConfig)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.PrintErr(err, *verbose, Config.BasicConfig.LogLvl)
 		os.Exit(2)
 	}
 

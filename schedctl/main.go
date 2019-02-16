@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	common "github.com/bgzzz/go-schedule/common"
-	log "github.com/sirupsen/logrus"
 	"os"
 )
 
@@ -94,9 +93,7 @@ func main() {
 
 	err := parseClientCfgFile(*configPath)
 	if err != nil {
-		if *verbose {
-			fmt.Println(err.Error())
-		}
+		common.PrintErr(err, *verbose, "")
 		fmt.Println(Usage)
 		os.Exit(1)
 	}
@@ -107,16 +104,14 @@ func main() {
 
 	err = common.InitLogging(&Config.BasicConfig)
 	if err != nil {
-		if *verbose {
-			fmt.Println(err.Error())
-		}
+		common.PrintErr(err, *verbose, "")
 		fmt.Println(Usage)
 		os.Exit(1)
 	}
 
 	err = parseCmd("schedctl", args)
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		fmt.Println(Usage)
 		os.Exit(1)
 	}

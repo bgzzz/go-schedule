@@ -7,9 +7,11 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
+	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
 )
 
@@ -19,8 +21,7 @@ func runRPC(call func(client pb.SchedulerClient) error) error {
 
 	conn, err := grpc.Dial(Config.ServerAddress, grpc.WithInsecure())
 	if err != nil {
-		fmt.Printf("There is a problem with connection: %s\n", err.Error())
-		log.Error("did not connect: %v", err)
+		common.PrintDebugErr(fmt.Errorf("There is a problem with connection: %s\n", err.Error()))
 		return err
 	}
 	defer conn.Close()
@@ -28,7 +29,7 @@ func runRPC(call func(client pb.SchedulerClient) error) error {
 
 	err = call(client)
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return err
 	}
 
@@ -45,19 +46,19 @@ func ScheduleTasks(args []string) error {
 		errStr := "There is not enought arguments for tasks schedule cmd"
 		fmt.Println(errStr)
 		err := fmt.Errorf(errStr)
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return err
 	}
 
 	if !fileCheck(args[0]) {
 		err := fmt.Errorf("There is no pointer to tasks file (-f, --file)")
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return err
 	}
 
 	tl, err := ParseTasksFile(args[1])
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return err
 	}
 
@@ -69,9 +70,7 @@ func ScheduleTasks(args []string) error {
 		tl, err := client.Schedule(ctx, tl)
 		cancel()
 		if err != nil {
-			fmt.Printf("Connection problems: %s\n", err.Error())
-			log.Error(err.Error())
-			return err
+			return trace.Errorf("Connection problems: %s\n", err.Error())
 		}
 
 		printTasks(tl.Tasks)
@@ -95,9 +94,7 @@ func ListTasks() error {
 		cancel()
 
 		if err != nil {
-			log.Error(err.Error())
-			fmt.Printf("Connection problems: %s\n", err.Error())
-			return err
+			return trace.Errorf("Connection problems: %s\n", err.Error())
 		}
 
 		printTasks(tl.Tasks)
@@ -121,9 +118,7 @@ func ListWorkers() error {
 		cancel()
 
 		if err != nil {
-			log.Error(err.Error())
-			fmt.Printf("Connection problems: %s\n", err.Error())
-			return err
+			return trace.Errorf("Connection problems: %s\n", err.Error())
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)

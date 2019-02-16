@@ -7,9 +7,8 @@ import (
 
 	pb "github.com/bgzzz/go-schedule/proto"
 
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Worker struct {
@@ -39,8 +38,7 @@ func (w *Worker) StartSender() {
 					log.Debugf("tx: %+v", msg)
 					err := w.SendWithTimeout(msg)
 					if err != nil {
-						log.Error(err.Error())
-						w.SetErr(err)
+						w.SetErr(trace.Wrap(err))
 					}
 				}
 			}
@@ -68,6 +66,8 @@ func (w *Worker) SetErr(err error) {
 	if w.err != nil {
 		w.err = fmt.Errorf("%s %s", w.err, err)
 	}
+
+	err = trace.Wrap(err)
 }
 
 // RxMsg is helper struct
@@ -92,15 +92,16 @@ func (w *Worker) RxWithTimeout() (interface{}, error) {
 		}
 		close(msgChan)
 	}()
+
 	t := time.NewTimer(w.silenceTimeout * time.Second)
 	select {
 	case <-t.C:
-		return nil, status.Errorf(codes.DeadlineExceeded, "timer for rx of "+string(w.silenceTimeout)+" expired")
+		return nil, trace.Errorf("timer for rx of " + string(w.silenceTimeout) + " expired")
 	case msg := <-msgChan:
 		if !t.Stop() {
 			<-t.C
 		}
-		return msg.msg, msg.err
+		return msg.msg, trace.Wrap(msg.err)
 	}
 }
 
@@ -114,15 +115,16 @@ func (w *Worker) SendWithTimeout(msg interface{}) error {
 		}
 		close(errChan)
 	}()
+
 	t := time.NewTimer(w.silenceTimeout * time.Second)
 	select {
 	case <-t.C:
-		return status.Errorf(codes.DeadlineExceeded, "timer for tx of "+string(w.silenceTimeout)+" expired")
+		return trace.Errorf("timer for tx of " + string(w.silenceTimeout) + " expired")
 	case err := <-errChan:
 		if !t.Stop() {
 			<-t.C
 		}
-		return err
+		return trace.Wrap(err)
 	}
 
 }
@@ -132,18 +134,15 @@ func (w *Worker) initLoop(processCB func(msg interface{}) error) error {
 
 		msg, err := w.RxWithTimeout()
 		if err != nil {
-			log.Error(err.Error())
-			return err
+			return trace.Wrap(err)
 		}
 
 		if err := processCB(msg); err != nil {
-			log.Error(err.Error())
-			return err
+			return trace.Wrap(err)
 		}
 
 		if err := w.CheckErr(); err != nil {
-			log.Error(err.Error())
-			return err
+			return trace.Wrap(err)
 		}
 	}
 }
