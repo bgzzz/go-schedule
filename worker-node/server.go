@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 
+	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
 	"github.com/bgzzz/go-schedule/wrpc"
 
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
+	"github.com/gravitational/trace"
 )
 
 func RunWorkerRPCServer(client pb.SchedulerClient) error {
@@ -16,8 +17,7 @@ func RunWorkerRPCServer(client pb.SchedulerClient) error {
 
 	stream, err := client.WorkerConnect(ctx)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	// for now generatin uuid
@@ -35,14 +35,13 @@ func RunWorkerRPCServer(client pb.SchedulerClient) error {
 	wRPCServer.Send(rsp)
 
 	if err := wRPCServer.InitLoop(); err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 	}
 
 	wRPCServer.StopSender()
 
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	return nil

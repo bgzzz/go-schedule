@@ -2,13 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
 
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -18,18 +16,23 @@ const (
 
 func main() {
 
+	verbose := flag.Bool("v", false, "-v for verbose debug output ")
 	filePath := flag.String("f", DefaultCfgFilePath, "-f worker-node.yaml, provides config file path")
 	flag.Parse()
 
 	err := parseClientCfgFile(*filePath)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.PrintErr(err, *verbose, "")
 		os.Exit(1)
+	}
+
+	if *verbose {
+		Config.BasicConfig.LogLvl = "debug"
 	}
 
 	err = common.InitLogging(&Config.BasicConfig)
 	if err != nil {
-		fmt.Println(err.Error())
+		common.PrintErr(err, *verbose, "")
 		os.Exit(2)
 	}
 
@@ -37,13 +40,14 @@ func main() {
 
 	conn, err := grpc.Dial(Config.ServerAddress, grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		common.PrintDebugErr(err)
+		os.Exit(3)
 	}
 	defer conn.Close()
 	client := pb.NewSchedulerClient(conn)
 
 	if err := RunWorkerRPCServer(client); err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 	}
 
 }

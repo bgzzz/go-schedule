@@ -11,6 +11,7 @@ import (
 	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
 
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -86,8 +87,7 @@ func (wrpc *WorkerRPCServer) execute(req *pb.MgmtReq) {
 	cancel()
 
 	if err != nil {
-		log.Error(err.Error())
-		wrpc.SetErr(err)
+		wrpc.SetErr(trace.Wrap(err))
 	}
 }
 
@@ -126,8 +126,7 @@ func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
 		}
 	default:
 		{
-			err = fmt.Errorf("There is no such method as %s", req.Method)
-			log.Error(err.Error())
+			err = trace.Errorf("There is no such method as %s", req.Method)
 		}
 	}
 	return err

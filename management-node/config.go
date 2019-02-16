@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"gopkg.in/yaml.v2"
 
 	"github.com/bgzzz/go-schedule/common"
+	"github.com/gravitational/trace"
 )
 
 // Scheduling algorithms that can be used for
@@ -64,7 +64,7 @@ var Config *ServerConfig
 func parseCfgFile(filePath string) error {
 	dat, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return err
+		return trace.Wrap(err)
 	}
 
 	var cfg ServerConfig
@@ -84,7 +84,7 @@ func cfgValidate(cfg *ServerConfig) error {
 	if cfg.SchedulerAlgo != SchedAlgoRR &&
 		cfg.SchedulerAlgo != SchedAlgoRand {
 
-		return fmt.Errorf("There is unknown scheduler algo (%s)", cfg.SchedulerAlgo)
+		return trace.Errorf("There is unknown scheduler algo (%s)", cfg.SchedulerAlgo)
 	}
 
 	// cfg.PingTimer has to be <= cfg.SilenceTimeout

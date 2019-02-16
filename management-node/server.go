@@ -15,6 +15,7 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/google/uuid"
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -50,7 +51,7 @@ func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 	defer mn.workerNodePoolMtx.Unlock()
 
 	if _, ok := mn.workerNodePool[wn.WN.Id]; ok {
-		return fmt.Errorf("There is a worker node with the same id %s in the worker node pool", wn.WN.Id)
+		return trace.Errorf("There is a worker node with the same id %s in the worker node pool", wn.WN.Id)
 	}
 
 	log.Debugf("Add worker node %s to the worker node pool", wn.WN.Id)
@@ -60,8 +61,7 @@ func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 
 	err := mn.SetToDb(wn, EtcdWorkerPrefix+wn.WN.Id)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	return nil
@@ -74,7 +74,7 @@ func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
 	defer mn.workerNodePoolMtx.Unlock()
 
 	if _, ok := mn.workerNodePool[wn.WN.Id]; !ok {
-		return fmt.Errorf("There is no worker node with id %s in the worker node pool", wn.WN.Id)
+		return trace.Errorf("There is no worker node with id %s in the worker node pool", wn.WN.Id)
 	}
 
 	log.Debugf("Rm worker node %s from the worker node pool", wn.WN.Id)
@@ -85,8 +85,7 @@ func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
 
 	err := mn.SetToDb(wn, EtcdWorkerPrefix+wn.WN.Id)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	return nil
@@ -110,7 +109,7 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 	// message have to contain its id in reply field
 	msg, err := wRPCClient.RxWithTimeout()
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return err
 	}
 
@@ -119,7 +118,7 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 
 	err = mn.AddWorkerNode(wRPCClient)
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return nil
 	}
 
@@ -132,7 +131,7 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 
 	// launch main eventloop
 	if err := wRPCClient.InitLoop(); err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 	}
 
 	wRPCClient.StopPinger()
@@ -141,8 +140,8 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 	rmErr := mn.RmWorkerNode(wRPCClient)
 	if rmErr != nil {
 		//concat errors in case there are problems with db
-		err = fmt.Errorf("%s %s", err.Error(), rmErr.Error())
-		log.Error(err.Error())
+		err = trace.Errorf("%s %s", err.Error(), rmErr.Error())
+		common.PrintDebugErr(err)
 	}
 
 	return err
@@ -166,7 +165,7 @@ func (md *ManagementNode) GetWorkerList(ctx context.Context, req *pb.DummyReq) (
 	gr, err := md.etcd.Get(eCtx, EtcdWorkerPrefix, opts...)
 	cancel()
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return nil, err
 	}
 
@@ -176,7 +175,7 @@ func (md *ManagementNode) GetWorkerList(ctx context.Context, req *pb.DummyReq) (
 		var wn wrpc.WorkerRPCClient
 		err := json.Unmarshal([]byte(item.Value), &wn)
 		if err != nil {
-			log.Error(err.Error())
+			common.PrintDebugErr(err)
 			return nil, err
 		}
 		wnl.Nodes = append(wnl.Nodes, wn.WN)
@@ -202,7 +201,7 @@ func (md *ManagementNode) GetTaskList(ctx context.Context, req *pb.DummyReq) (*p
 	gr, err := md.etcd.Get(eCtx, EtcdTaskPrefix, opts...)
 	cancel()
 	if err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return nil, err
 	}
 
@@ -212,7 +211,7 @@ func (md *ManagementNode) GetTaskList(ctx context.Context, req *pb.DummyReq) (*p
 		var task pb.Task
 		err := json.Unmarshal([]byte(item.Value), &task)
 		if err != nil {
-			log.Error(err.Error())
+			common.PrintDebugErr(err)
 			return nil, err
 		}
 		tl.Tasks = append(tl.Tasks, &task)
@@ -250,7 +249,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		}
 
 		if err := md.setTasksToDb(req.Tasks); err != nil {
-			log.Error(err.Error())
+			common.PrintDebugErr(err)
 			return nil, err
 		}
 
@@ -292,7 +291,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		task.WorkerId = workerId
 
 		if err := md.SetToDb(task, EtcdTaskPrefix+id); err != nil {
-			log.Error(err.Error())
+			common.PrintDebugErr(err)
 			return nil, err
 		}
 
@@ -306,7 +305,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 			t.State = rsp.Reply
 			var err error
 			if err = md.SetToDb(&t, EtcdTaskPrefix+t.Id); err != nil {
-				log.Error(err.Error())
+				common.PrintDebugErr(err)
 			}
 
 			messanger <- msg{
@@ -317,7 +316,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 
 		onTimerExpiredHandler := func() {
 			err := fmt.Errorf("timer is expired for rsp on task %s", task.Id)
-			log.Error(err.Error())
+			common.PrintDebugErr(err)
 			messanger <- msg{
 				err:  err,
 				task: &t,
@@ -355,12 +354,12 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 
 		// check if it responded with error
 		if m.err != nil {
-			log.Error(m.err)
+			common.PrintDebugErr(m.err)
 
 			// set error to worker error field
 			m.task.WorkerError = m.err.Error()
 			if err := md.SetToDb(m.task, EtcdTaskPrefix+m.task.Id); err != nil {
-				log.Error(err.Error())
+				common.PrintDebugErr(err)
 				return nil, err
 			}
 			tasks = append(tasks, m.task)
@@ -380,8 +379,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 func (md *ManagementNode) SetToDb(subj interface{}, id string) error {
 	b, err := json.Marshal(subj)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(),
@@ -389,8 +387,7 @@ func (md *ManagementNode) SetToDb(subj interface{}, id string) error {
 	_, err = md.etcd.Put(ctx, id, string(b))
 	cancel()
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	return nil
@@ -408,12 +405,12 @@ func (md *ManagementNode) SetTaskState(ctx context.Context, task *pb.Task) (*pb.
 	log.Infof("SetTaskState with params %+v", task)
 
 	if err := md.StopTaskDeadTimeout(task.Id); err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return nil, err
 	}
 
 	if err := md.SetToDb(task, EtcdTaskPrefix+task.Id); err != nil {
-		log.Error(err.Error())
+		common.PrintDebugErr(err)
 		return nil, err
 	}
 
@@ -426,8 +423,7 @@ func (md *ManagementNode) setTasksToDb(tasks []*pb.Task) error {
 	for _, task := range tasks {
 		err := md.SetToDb(task, EtcdTaskPrefix+task.Id)
 		if err != nil {
-			log.Error(err.Error())
-			return err
+			return trace.Wrap(err)
 		}
 	}
 	return nil
@@ -441,8 +437,7 @@ func (md *ManagementNode) PrepareZeroState() error {
 
 	tl, err := md.GetTaskList(context.Background(), &pb.DummyReq{})
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	for _, task := range tl.Tasks {
@@ -450,16 +445,14 @@ func (md *ManagementNode) PrepareZeroState() error {
 			task.State = common.TaskStateDead
 			err := md.SetToDb(task, EtcdTaskPrefix+task.Id)
 			if err != nil {
-				log.Error(err.Error())
-				return err
+				return trace.Wrap(err)
 			}
 		}
 	}
 
 	wl, err := md.GetWorkerList(context.Background(), &pb.DummyReq{})
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	for _, worker := range wl.Nodes {
@@ -472,8 +465,7 @@ func (md *ManagementNode) PrepareZeroState() error {
 
 			err := md.SetToDb(wrapper, EtcdWorkerPrefix+worker.Id)
 			if err != nil {
-				log.Error(err.Error())
-				return err
+				return trace.Wrap(err)
 			}
 		}
 	}
@@ -494,7 +486,7 @@ func (md *ManagementNode) SetTaskAndRunDeadTimeout(t *Task) {
 		t.task.State = common.TaskStateDead
 		err := md.SetToDb(t.task, EtcdTaskPrefix+t.task.Id)
 		if err != nil {
-			log.Error(err.Error())
+			common.PrintDebugErr(err)
 		}
 	})
 }
@@ -509,8 +501,7 @@ func (md *ManagementNode) StopTaskDeadTimeout(id string) error {
 	task, ok := md.scheduledTasks[id]
 	if !ok {
 		err := fmt.Errorf("There is no task %s in the scheduled task storage", id)
-		log.Error(err.Error())
-		return err
+		return trace.Wrap(err)
 	}
 
 	task.StopDeadTimeout()

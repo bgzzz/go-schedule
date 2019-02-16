@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"gopkg.in/yaml.v2"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/gravitational/trace"
 
 	pb "github.com/bgzzz/go-schedule/proto"
 )
@@ -27,17 +26,15 @@ type TasksYaml struct {
 func ParseTasksFile(filePath string) (*pb.TaskList, error) {
 	dat, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		fmt.Printf("There is a problem with reading tasks file: %s\n", err.Error())
-		log.Error(err.Error())
-		return nil, err
+		return nil, trace.Errorf("There is a problem with reading tasks file: %s\n",
+			err.Error())
 	}
 
 	var tasks TasksYaml
 	err = yaml.Unmarshal(dat, &tasks)
 	if err != nil {
-		fmt.Println("There is a problem with yaml structure")
-		log.Error(err.Error())
-		return nil, err
+		return nil, trace.Errorf("There is a problem with yaml structure: : %s\n",
+			err.Error())
 	}
 
 	taskList := &pb.TaskList{}

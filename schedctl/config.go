@@ -5,6 +5,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+
+	"github.com/gravitational/trace"
 )
 
 var Config *SchedCtlConfig
@@ -26,13 +28,13 @@ type SchedCtlConfig struct {
 func parseClientCfgFile(filePath string) error {
 	dat, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return err
+		return trace.Wrap(err)
 	}
 
 	var cfg SchedCtlConfig
 	err = yaml.Unmarshal(dat, &cfg)
 	if err != nil {
-		return err
+		return trace.Wrap(err)
 	}
 
 	Config = &cfg
