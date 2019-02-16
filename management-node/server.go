@@ -35,6 +35,9 @@ type ManagementNode struct {
 	// scheduled at the moment
 	scheduledTasks    map[string]*Task
 	scheduledTasksMtx sync.RWMutex
+
+	// cfg holds server config
+	cfg *ServerConfig
 }
 
 // Etcd prefixes that are used for storing the objects to
@@ -102,7 +105,7 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 		Id:      "",
 		Address: "TBD",
 		State:   common.WorkerNodeStateConnected,
-	}, Config.SilenceTimeout)
+	}, mn.cfg.SilenceTimeout)
 
 	// by architecture decision worker connects and send first
 	// message to via stream
@@ -127,7 +130,7 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 	wRPCClient.StartSender()
 
 	// launch pinger to check connection state
-	wRPCClient.StartPinger(time.Duration(Config.PingTimer))
+	wRPCClient.StartPinger(mn.cfg.PingTimer)
 
 	// launch main eventloop
 	if err := wRPCClient.InitLoop(); err != nil {
@@ -161,7 +164,7 @@ func (md *ManagementNode) GetWorkerList(ctx context.Context, req *pb.DummyReq) (
 	}
 
 	eCtx, cancel := context.WithTimeout(context.Background(),
-		time.Duration(Config.DialTimeout)*time.Second)
+		md.cfg.EtcdDialTimeout*time.Second)
 	gr, err := md.etcd.Get(eCtx, EtcdWorkerPrefix, opts...)
 	cancel()
 	if err != nil {
@@ -197,7 +200,7 @@ func (md *ManagementNode) GetTaskList(ctx context.Context, req *pb.DummyReq) (*p
 	}
 
 	eCtx, cancel := context.WithTimeout(context.Background(),
-		time.Duration(Config.DialTimeout)*time.Second)
+		md.cfg.EtcdDialTimeout*time.Second)
 	gr, err := md.etcd.Get(eCtx, EtcdTaskPrefix, opts...)
 	cancel()
 	if err != nil {
@@ -273,11 +276,11 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		workerId := workers[0]
 
 		// RR worker id calculation
-		if Config.SchedulerAlgo == SchedAlgoRR {
+		if md.cfg.SchedulerAlgo == SchedAlgoRR {
 			workerId = workers[int(math.
 				Mod(float64(i),
 					float64(len(workers))))]
-		} else if Config.SchedulerAlgo == SchedAlgoRand {
+		} else if md.cfg.SchedulerAlgo == SchedAlgoRand {
 			s := rand.NewSource(time.Now().UnixNano())
 			r := rand.New(s)
 
@@ -338,13 +341,14 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		md.SetTaskAndRunDeadTimeout(&Task{
 			task: task,
 			stop: make(chan struct{}, 1),
+			cfg:  md.cfg,
 		})
 
 		// sending to worker node
 		md.workerNodePool[workerId].
 			SendWithHandlerTimeout(req, onRspHandler,
 				onTimerExpiredHandler,
-				time.Duration(Config.SilenceTimeout))
+				md.cfg.SilenceTimeout)
 	}
 
 	// prepare task objects to response to schedctl
@@ -383,7 +387,7 @@ func (md *ManagementNode) SetToDb(subj interface{}, id string) error {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(),
-		time.Duration(Config.DialTimeout)*time.Second)
+		md.cfg.EtcdDialTimeout*time.Second)
 	_, err = md.etcd.Put(ctx, id, string(b))
 	cancel()
 	if err != nil {

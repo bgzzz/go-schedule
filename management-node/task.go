@@ -17,6 +17,8 @@ type Task struct {
 	// channel for harnfull stop of on deadTimerexpired
 	// go routine
 	stop chan struct{}
+
+	cfg *ServerConfig
 }
 
 //TBD: Add new task function
@@ -24,7 +26,7 @@ type Task struct {
 // StartDeadTimeout start timeout
 // and runs cb when expired
 func (t *Task) StartDeadTimeout(cb func()) {
-	t.deadTimer = time.NewTimer(time.Duration(Config.DeadTimeout) * time.Second)
+	t.deadTimer = time.NewTimer(t.cfg.DeadTimeout * time.Second)
 	go func() {
 		select {
 		case <-t.deadTimer.C:

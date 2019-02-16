@@ -91,7 +91,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := parseClientCfgFile(*configPath)
+	cfg, err := parseClientCfgFile(*configPath)
 	if err != nil {
 		common.PrintErr(err, *verbose, "")
 		fmt.Println(Usage)
@@ -99,17 +99,17 @@ func main() {
 	}
 
 	if *verbose {
-		Config.BasicConfig.LogLvl = "debug"
+		cfg.BasicConfig.LogLvl = "debug"
 	}
 
-	err = common.InitLogging(&Config.BasicConfig)
+	err = common.InitLogging(&cfg.BasicConfig)
 	if err != nil {
 		common.PrintErr(err, *verbose, "")
 		fmt.Println(Usage)
 		os.Exit(1)
 	}
 
-	err = parseCmd("schedctl", args)
+	err = parseCmd("schedctl", args, cfg)
 	if err != nil {
 		common.PrintDebugErr(err)
 		fmt.Println(Usage)

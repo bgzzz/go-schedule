@@ -27,7 +27,7 @@ type WorkerRPCServer struct {
 func NewWorkerNodeRPCServer(id string,
 	stream pb.Scheduler_WorkerConnectClient,
 	client pb.SchedulerClient,
-	silenceTimeout int) *WorkerRPCServer {
+	silenceTimeout time.Duration) *WorkerRPCServer {
 	return &WorkerRPCServer{
 		client: client,
 		Worker: &Worker{
@@ -36,7 +36,7 @@ func NewWorkerNodeRPCServer(id string,
 			streamClient:   stream,
 			send:           make(chan interface{}, 1),
 			stopSender:     make(chan struct{}, 1),
-			silenceTimeout: time.Duration(silenceTimeout),
+			silenceTimeout: silenceTimeout,
 		},
 	}
 }

@@ -1,10 +1,12 @@
 package main
 
 import (
-	"github.com/bgzzz/go-schedule/common"
+	"io/ioutil"
+	"time"
 
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
+
+	"github.com/bgzzz/go-schedule/common"
 
 	"github.com/gravitational/trace"
 )
@@ -12,8 +14,6 @@ import (
 const (
 	DefaultTmpFolderPath = "/tmp/go-schedule/worker-node/"
 )
-
-var Config *WorkerNodeConfig
 
 type WorkerNodeConfig struct {
 	// BasicConfig is common config for all
@@ -24,25 +24,24 @@ type WorkerNodeConfig struct {
 	ServerAddress string `yaml:"server_address"`
 
 	// ConnectionTimeout is used for gRPC context setup
-	ConnectionTimeout int `yaml:"connetion_timeout"`
+	ConnectionTimeout time.Duration `yaml:"connetion_timeout"`
 
-	SilenceTimeout int `yaml:"silence_timeout"`
+	SilenceTimeout time.Duration `yaml:"silence_timeout"`
 }
 
 // parseClientCfgFile parses config yaml file to
 // global config varaible
-func parseClientCfgFile(filePath string) error {
+func parseClientCfgFile(filePath string) (*WorkerNodeConfig, error) {
 	dat, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return trace.Wrap(err)
+		return nil, trace.Wrap(err)
 	}
 
 	var cfg WorkerNodeConfig
 	err = yaml.Unmarshal(dat, &cfg)
 	if err != nil {
-		return trace.Wrap(err)
+		return nil, trace.Wrap(err)
 	}
 
-	Config = &cfg
-	return trace.Wrap(nil)
+	return &cfg, nil
 }

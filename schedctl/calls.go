@@ -17,9 +17,9 @@ import (
 
 // runRPC is wrapper for gRPC connection procedures
 // it connects to management node and runs specific call
-func runRPC(call func(client pb.SchedulerClient) error) error {
+func runRPC(call func(client pb.SchedulerClient) error, cfg *SchedCtlConfig) error {
 
-	conn, err := grpc.Dial(Config.ServerAddress, grpc.WithInsecure())
+	conn, err := grpc.Dial(cfg.ServerAddress, grpc.WithInsecure())
 	if err != nil {
 		common.PrintDebugErr(fmt.Errorf("There is a problem with connection: %s\n", err.Error()))
 		return err
@@ -40,7 +40,7 @@ func runRPC(call func(client pb.SchedulerClient) error) error {
 // for tasks schedule detective parses it in case of wrong
 // usage and calls the schedule gRPC and prints the result
 // to stdout
-func ScheduleTasks(args []string) error {
+func ScheduleTasks(args []string, cfg *SchedCtlConfig) error {
 
 	if len(args) < 2 {
 		errStr := "There is not enought arguments for tasks schedule cmd"
@@ -64,7 +64,7 @@ func ScheduleTasks(args []string) error {
 
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			time.Duration(Config.ConnectionTimeout)*time.Second)
+			cfg.ConnectionTimeout*time.Second)
 
 		log.Debug("Calling Schedule RPC")
 		tl, err := client.Schedule(ctx, tl)
@@ -75,16 +75,16 @@ func ScheduleTasks(args []string) error {
 
 		printTasks(tl.Tasks)
 		return nil
-	})
+	}, cfg)
 }
 
 // ListTasks calls the GetTaskList and
 // prints the result of received list of tasks that
 // were registered to stdout
-func ListTasks() error {
+func ListTasks(cfg *SchedCtlConfig) error {
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			time.Duration(Config.ConnectionTimeout)*time.Second)
+			cfg.ConnectionTimeout*time.Second)
 
 		log.Debug("Calling ListTasks RPC")
 		tl, err := client.GetTaskList(ctx, &pb.DummyReq{
@@ -100,16 +100,16 @@ func ListTasks() error {
 		printTasks(tl.Tasks)
 
 		return nil
-	})
+	}, cfg)
 }
 
 // ListWorkers calls the GetWorkerList gRPC and prints the
 // result of workers that were registered on management node
 // to stdout
-func ListWorkers() error {
+func ListWorkers(cfg *SchedCtlConfig) error {
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			time.Duration(Config.ConnectionTimeout)*time.Second)
+			cfg.ConnectionTimeout*time.Second)
 
 		log.Debug("Calling ListWorkers RPC")
 		wl, err := client.GetWorkerList(ctx, &pb.DummyReq{
@@ -129,5 +129,5 @@ func ListWorkers() error {
 		w.Flush()
 
 		return nil
-	})
+	}, cfg)
 }

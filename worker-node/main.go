@@ -20,17 +20,17 @@ func main() {
 	filePath := flag.String("f", DefaultCfgFilePath, "-f worker-node.yaml, provides config file path")
 	flag.Parse()
 
-	err := parseClientCfgFile(*filePath)
+	cfg, err := parseClientCfgFile(*filePath)
 	if err != nil {
 		common.PrintErr(err, *verbose, "")
 		os.Exit(1)
 	}
 
 	if *verbose {
-		Config.BasicConfig.LogLvl = "debug"
+		cfg.BasicConfig.LogLvl = "debug"
 	}
 
-	err = common.InitLogging(&Config.BasicConfig)
+	err = common.InitLogging(&cfg.BasicConfig)
 	if err != nil {
 		common.PrintErr(err, *verbose, "")
 		os.Exit(2)
@@ -38,7 +38,7 @@ func main() {
 
 	// Set up a connection to the server.
 
-	conn, err := grpc.Dial(Config.ServerAddress, grpc.WithInsecure())
+	conn, err := grpc.Dial(cfg.ServerAddress, grpc.WithInsecure())
 	if err != nil {
 		common.PrintDebugErr(err)
 		os.Exit(3)
@@ -46,7 +46,7 @@ func main() {
 	defer conn.Close()
 	client := pb.NewSchedulerClient(conn)
 
-	if err := RunWorkerRPCServer(client); err != nil {
+	if err := RunWorkerRPCServer(client, cfg); err != nil {
 		common.PrintDebugErr(err)
 	}
 
