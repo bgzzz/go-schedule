@@ -51,9 +51,9 @@ const (
 // errors in case of data inconsistency
 func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 	mn.workerNodePoolMtx.Lock()
-	defer mn.workerNodePoolMtx.Unlock()
 
 	if _, ok := mn.workerNodePool[wn.WN.Id]; ok {
+		mn.workerNodePoolMtx.Unlock()
 		return trace.Errorf("There is a worker node with the same id %s in the worker node pool", wn.WN.Id)
 	}
 
@@ -61,6 +61,8 @@ func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 	mn.workerNodePool[wn.WN.Id] = wn
 
 	wn.WN.State = common.WorkerNodeStateConnected
+
+	mn.workerNodePoolMtx.Unlock()
 
 	err := mn.SetToDb(wn, EtcdWorkerPrefix+wn.WN.Id)
 	if err != nil {
@@ -74,9 +76,9 @@ func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 // and changes state of the worker as disconnected
 func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
 	mn.workerNodePoolMtx.Lock()
-	defer mn.workerNodePoolMtx.Unlock()
 
 	if _, ok := mn.workerNodePool[wn.WN.Id]; !ok {
+		mn.workerNodePoolMtx.Unlock()
 		return trace.Errorf("There is no worker node with id %s in the worker node pool", wn.WN.Id)
 	}
 
@@ -86,6 +88,7 @@ func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
 
 	wn.WN.State = common.WorkerNodeStateDisconnected
 
+	mn.workerNodePoolMtx.Unlock()
 	err := mn.SetToDb(wn, EtcdWorkerPrefix+wn.WN.Id)
 	if err != nil {
 		return trace.Wrap(err)
