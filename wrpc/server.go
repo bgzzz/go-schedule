@@ -35,7 +35,6 @@ func NewWorkerNodeRPCServer(id string,
 			streamServer:   nil,
 			streamClient:   stream,
 			send:           make(chan interface{}, 1),
-			stopSender:     make(chan struct{}, 1),
 			silenceTimeout: silenceTimeout,
 		},
 	}
@@ -45,7 +44,7 @@ func NewWorkerNodeRPCServer(id string,
 // by management node in order to execute task
 // function execute task described in MgmtReq
 // and calls the SetTaskState after execution is successfully ended
-func (wrpc *WorkerRPCServer) execute(req *pb.MgmtReq) {
+func (wrpc *WorkerRPCServer) execute(ctx context.Context, req *pb.MgmtReq) {
 
 	var task pb.Task
 	if len(req.Params) == 0 {
@@ -81,9 +80,9 @@ func (wrpc *WorkerRPCServer) execute(req *pb.MgmtReq) {
 	}
 
 	// task is done setting task state to management node
-	ctx, cancel := context.WithTimeout(context.Background(),
+	c, cancel := context.WithTimeout(ctx,
 		wrpc.silenceTimeout*time.Second)
-	_, err := wrpc.client.SetTaskState(ctx, &task)
+	_, err := wrpc.client.SetTaskState(c, &task)
 	cancel()
 
 	if err != nil {
@@ -91,7 +90,7 @@ func (wrpc *WorkerRPCServer) execute(req *pb.MgmtReq) {
 	}
 }
 
-func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
+func (wrpc *WorkerRPCServer) ProcessRequest(ctx context.Context, r interface{}) error {
 	req := r.(*pb.MgmtReq)
 	var err error
 	switch req.Method {
@@ -105,9 +104,9 @@ func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
 					Reply: common.TaskStateScheduled,
 				}
 
-				wrpc.Send(rsp)
+				wrpc.Send(ctx, rsp)
 
-				wrpc.execute(req)
+				wrpc.execute(ctx, req)
 
 			}()
 
@@ -120,7 +119,7 @@ func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
 					Id:    req.Id,
 					Reply: common.WorkerNodeRPCPingReply,
 				}
-				wrpc.Send(rsp)
+				wrpc.Send(ctx, rsp)
 			}()
 
 		}
@@ -132,24 +131,23 @@ func (wrpc *WorkerRPCServer) ProcessRequest(r interface{}) error {
 	return err
 }
 
-func (wrpc *WorkerRPCServer) Send(rsp *pb.WorkerRsp) {
-	t := time.NewTimer(wrpc.silenceTimeout * time.Second)
+func (wrpc *WorkerRPCServer) Send(ctx context.Context, rsp *pb.WorkerRsp) {
+	c, cancel := context.WithTimeout(ctx, wrpc.silenceTimeout*time.Second)
+	defer cancel()
 
 	select {
 	case wrpc.send <- rsp:
 		{
-			if !t.Stop() {
-				<-t.C
-			}
+
 		}
 		//this one is done to prevent go routines leaking
-	case <-t.C:
+	case <-c.Done():
 		{
 			log.Warningf("Timeouted to send rsp %s", rsp.Id)
 		}
 	}
 }
 
-func (wrpc *WorkerRPCServer) InitLoop() error {
-	return wrpc.initLoop(wrpc.ProcessRequest)
+func (wrpc *WorkerRPCServer) InitLoop(ctx context.Context) error {
+	return wrpc.initLoop(ctx, wrpc.ProcessRequest)
 }

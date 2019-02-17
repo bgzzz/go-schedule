@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"time"
 
 	pb "github.com/bgzzz/go-schedule/proto"
@@ -14,9 +15,9 @@ type Task struct {
 	task *pb.Task
 
 	deadTimer *time.Timer
-	// channel for harnfull stop of on deadTimerexpired
+	// channel for harmfull stop of on deadTimerexpired
 	// go routine
-	stop chan struct{}
+	rxed chan struct{}
 
 	cfg *ServerConfig
 }
@@ -25,19 +26,20 @@ type Task struct {
 
 // StartDeadTimeout start timeout
 // and runs cb when expired
-func (t *Task) StartDeadTimeout(cb func()) {
-	t.deadTimer = time.NewTimer(t.cfg.DeadTimeout * time.Second)
+func (t *Task) StartDeadTimeout(ctx context.Context,
+	cb func(ctx context.Context)) {
+
 	go func() {
+		c, cancel := context.WithTimeout(ctx, t.cfg.DeadTimeout*time.Second)
+		defer cancel()
+
 		select {
-		case <-t.deadTimer.C:
+		case <-c.Done():
 			{
-				cb()
+				cb(ctx)
 			}
-		case <-t.stop:
+		case <-t.rxed:
 			{
-				if !t.deadTimer.Stop() {
-					<-t.deadTimer.C
-				}
 				log.Debugf("Dead timeout stopped for task %s", t.task.Id)
 			}
 		}
@@ -47,7 +49,7 @@ func (t *Task) StartDeadTimeout(cb func()) {
 // StopDeadTimeout stops dead timeout for task
 func (t *Task) StopDeadTimeout() {
 	select {
-	case t.stop <- struct{}{}:
+	case t.rxed <- struct{}{}:
 		{
 			log.Debugf("Dead timeout is stopped for task %s",
 				t.task.Id)

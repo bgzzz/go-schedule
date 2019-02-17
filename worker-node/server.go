@@ -26,19 +26,20 @@ func RunWorkerRPCServer(client pb.SchedulerClient, cfg *WorkerNodeConfig) error 
 
 	wRPCServer := wrpc.NewWorkerNodeRPCServer(id, stream, client, cfg.SilenceTimeout)
 
-	wRPCServer.StartSender()
+	c, cancel := context.WithCancel(ctx)
+	wRPCServer.StartSender(c)
 
 	// initiation rsp
 	rsp := &pb.WorkerRsp{
 		Reply: id,
 	}
-	wRPCServer.Send(rsp)
+	wRPCServer.Send(c, rsp)
 
-	if err := wRPCServer.InitLoop(); err != nil {
+	if err := wRPCServer.InitLoop(c); err != nil {
 		common.PrintDebugErr(err)
 	}
 
-	wRPCServer.StopSender()
+	wRPCServer.StopSender(cancel)
 
 	if err != nil {
 		return trace.Wrap(err)

@@ -1,6 +1,7 @@
 package wrpc
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Callback func(rsp *pb.WorkerRsp)
+type Callback func(ctx context.Context, rsp *pb.WorkerRsp)
 
 // WorkerRPCClient the structure that holds information about
 // connected worker node
@@ -41,7 +42,6 @@ func NewWorkerNodeRPCClient(id string,
 			streamServer:   stream,
 			streamClient:   nil,
 			send:           make(chan interface{}, 1),
-			stopSender:     make(chan struct{}, 1),
 			silenceTimeout: silenceTimeout,
 		},
 		subscription: make(map[string]Callback),
@@ -50,34 +50,34 @@ func NewWorkerNodeRPCClient(id string,
 
 // SendWithHandlerTimeout sends request to sender
 // and register callbacks on response and timer expiration
-func (wn *WorkerRPCClient) SendWithHandlerTimeout(req pb.MgmtReq,
+func (wn *WorkerRPCClient) SendWithHandlerTimeout(ctx context.Context,
+	req pb.MgmtReq,
 	onRspHandler Callback,
 	onTimerExpiredHandler func(),
-	timoute time.Duration) {
+	timeout time.Duration) {
 
 	go func() {
-		t := time.NewTimer(timoute * time.Second)
+		c, cancel := context.WithTimeout(ctx, timeout*time.Second)
+		defer cancel()
 		// channel for connection between callback
 		// and on rsp go routine
 		rxChannel := make(chan struct{}, 1)
 
-		cb := func(rsp *pb.WorkerRsp) {
+		cb := func(cont context.Context, rsp *pb.WorkerRsp) {
 			rxChannel <- struct{}{}
 
-			onRspHandler(rsp)
+			onRspHandler(cont, rsp)
 		}
 
 		// sending request to sender
-		wn.Send(req, cb)
+		wn.Send(c, req, cb)
 
 		select {
 		case <-rxChannel:
 			{
-				if !t.Stop() {
-					<-t.C
-				}
+
 			}
-		case <-t.C:
+		case <-c.Done():
 			{
 				// remove subscription cb if timer expired
 				wn.subscriptionMtx.Lock()
@@ -92,7 +92,7 @@ func (wn *WorkerRPCClient) SendWithHandlerTimeout(req pb.MgmtReq,
 
 // Send send request to sender and registers cb in the
 // subscription map
-func (wn *WorkerRPCClient) Send(req pb.MgmtReq, cb Callback) {
+func (wn *WorkerRPCClient) Send(ctx context.Context, req pb.MgmtReq, cb Callback) {
 
 	//check if it is already set
 	// if request Id set by uuid string
@@ -107,18 +107,17 @@ func (wn *WorkerRPCClient) Send(req pb.MgmtReq, cb Callback) {
 	wn.subscription[req.Id] = cb
 	wn.subscriptionMtx.Unlock()
 
-	t := time.NewTimer(wn.silenceTimeout * time.Second)
+	c, cancel := context.WithTimeout(ctx, wn.silenceTimeout*time.Second)
+	defer cancel()
 
 	select {
 	case wn.send <- &req:
 		{
-			if !t.Stop() {
-				<-t.C
-			}
+
 		}
 		// this one is done to prevent go routines leaking
 		// can be done with default
-	case <-t.C:
+	case <-c.Done():
 		{
 			log.Warningf("Timeouted to send req %s", req.Id)
 		}
@@ -127,7 +126,7 @@ func (wn *WorkerRPCClient) Send(req pb.MgmtReq, cb Callback) {
 
 // ProcessResponse execute the callback and delete it from
 // subscription storage
-func (wn *WorkerRPCClient) ProcessResponse(r interface{}) error {
+func (wn *WorkerRPCClient) ProcessResponse(ctx context.Context, r interface{}) error {
 
 	rsp := r.(*pb.WorkerRsp)
 	wn.subscriptionMtx.Lock()
@@ -138,15 +137,15 @@ func (wn *WorkerRPCClient) ProcessResponse(r interface{}) error {
 		return trace.Errorf("There is no handler for responce %s", rsp.Id)
 	}
 
-	go call(rsp)
+	go call(ctx, rsp)
 
 	delete(wn.subscription, rsp.Id)
 
 	return nil
 }
 
-func (wn *WorkerRPCClient) InitLoop() error {
-	return wn.initLoop(wn.ProcessResponse)
+func (wn *WorkerRPCClient) InitLoop(ctx context.Context) error {
+	return wn.initLoop(ctx, wn.ProcessResponse)
 }
 
 func (wn *WorkerRPCClient) SetId(id string) {
@@ -155,7 +154,7 @@ func (wn *WorkerRPCClient) SetId(id string) {
 
 // StartPinger setups ticker and sends ping to worker on
 // every tick
-func (wn *WorkerRPCClient) StartPinger(d time.Duration) {
+func (wn *WorkerRPCClient) StartPinger(ctx context.Context, d time.Duration) {
 	wn.pingTicker = time.NewTicker(d * time.Second)
 
 	log.Debug("Start pinger")
@@ -165,7 +164,7 @@ func (wn *WorkerRPCClient) StartPinger(d time.Duration) {
 				Method: common.WorkerNodeRPCPing,
 			}
 
-			onRspHandler := func(rsp *pb.WorkerRsp) {
+			onRspHandler := func(c context.Context, rsp *pb.WorkerRsp) {
 
 				if rsp.Reply != common.WorkerNodeRPCPingReply {
 					err := trace.Errorf("Wrong answer on ping with id %s", rsp.Id)
@@ -182,7 +181,7 @@ func (wn *WorkerRPCClient) StartPinger(d time.Duration) {
 				wn.SetErr(err)
 			}
 
-			wn.SendWithHandlerTimeout(req,
+			wn.SendWithHandlerTimeout(ctx, req,
 				onRspHandler, onTimerExpiredHandler, wn.silenceTimeout)
 		}
 	}()
