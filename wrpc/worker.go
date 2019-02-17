@@ -1,6 +1,7 @@
 package wrpc
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -13,7 +14,6 @@ import (
 
 type Worker struct {
 	id           string
-	stopSender   chan struct{}
 	send         chan interface{}
 	streamServer pb.Scheduler_WorkerConnectServer
 	streamClient pb.Scheduler_WorkerConnectClient
@@ -24,11 +24,11 @@ type Worker struct {
 	silenceTimeout time.Duration
 }
 
-func (w *Worker) StartSender() {
+func (w *Worker) StartSender(ctx context.Context) {
 	go func() {
 		for {
 			select {
-			case <-w.stopSender:
+			case <-ctx.Done():
 				{
 					log.Debugf("sender is stopped for worker node ")
 					return
@@ -36,7 +36,7 @@ func (w *Worker) StartSender() {
 			case msg := <-w.send:
 				{
 					log.Debugf("tx: %+v", msg)
-					err := w.SendWithTimeout(msg)
+					err := w.SendWithTimeout(ctx, msg)
 					if err != nil {
 						w.SetErr(trace.Wrap(err))
 					}
@@ -46,9 +46,8 @@ func (w *Worker) StartSender() {
 	}()
 }
 
-func (w *Worker) StopSender() {
-	w.stopSender <- struct{}{}
-	close(w.stopSender)
+func (w *Worker) StopSender(cancel context.CancelFunc) {
+	cancel()
 }
 
 func (w *Worker) CheckErr() error {
@@ -76,7 +75,7 @@ type rxMsg struct {
 	msg interface{}
 }
 
-func (w *Worker) RxWithTimeout() (interface{}, error) {
+func (w *Worker) RxWithTimeout(ctx context.Context) (interface{}, error) {
 	msgChan := make(chan rxMsg, 1)
 	go func() {
 		var msg interface{}
@@ -93,19 +92,18 @@ func (w *Worker) RxWithTimeout() (interface{}, error) {
 		close(msgChan)
 	}()
 
-	t := time.NewTimer(w.silenceTimeout * time.Second)
+	c, cancel := context.WithTimeout(ctx, w.silenceTimeout*time.Second)
+	defer cancel()
+
 	select {
-	case <-t.C:
+	case <-c.Done():
 		return nil, trace.Errorf("timer for rx of " + string(w.silenceTimeout) + " expired")
 	case msg := <-msgChan:
-		if !t.Stop() {
-			<-t.C
-		}
 		return msg.msg, trace.Wrap(msg.err)
 	}
 }
 
-func (w *Worker) SendWithTimeout(msg interface{}) error {
+func (w *Worker) SendWithTimeout(ctx context.Context, msg interface{}) error {
 	errChan := make(chan error, 1)
 	go func() {
 		if w.streamServer != nil {
@@ -116,28 +114,28 @@ func (w *Worker) SendWithTimeout(msg interface{}) error {
 		close(errChan)
 	}()
 
-	t := time.NewTimer(w.silenceTimeout * time.Second)
+	c, cancel := context.WithTimeout(ctx, w.silenceTimeout*time.Second)
+	defer cancel()
+
 	select {
-	case <-t.C:
+	case <-c.Done():
 		return trace.Errorf("timer for tx of " + string(w.silenceTimeout) + " expired")
 	case err := <-errChan:
-		if !t.Stop() {
-			<-t.C
-		}
 		return trace.Wrap(err)
 	}
 
 }
 
-func (w *Worker) initLoop(processCB func(msg interface{}) error) error {
+func (w *Worker) initLoop(ctx context.Context,
+	processCB func(ctx context.Context, msg interface{}) error) error {
 	for {
 
-		msg, err := w.RxWithTimeout()
+		msg, err := w.RxWithTimeout(ctx)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 
-		if err := processCB(msg); err != nil {
+		if err := processCB(ctx, msg); err != nil {
 			return trace.Wrap(err)
 		}
 

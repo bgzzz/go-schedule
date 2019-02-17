@@ -49,7 +49,8 @@ const (
 
 // AddWorkerNode thread safely adds worker node to worker pool and etcd
 // errors in case of data inconsistency
-func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
+func (mn *ManagementNode) AddWorkerNode(ctx context.Context,
+	wn *wrpc.WorkerRPCClient) error {
 	mn.workerNodePoolMtx.Lock()
 
 	if _, ok := mn.workerNodePool[wn.WN.Id]; ok {
@@ -64,7 +65,7 @@ func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 
 	mn.workerNodePoolMtx.Unlock()
 
-	err := mn.SetToDb(wn, EtcdWorkerPrefix+wn.WN.Id)
+	err := mn.SetToDb(ctx, wn, EtcdWorkerPrefix+wn.WN.Id)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -74,7 +75,7 @@ func (mn *ManagementNode) AddWorkerNode(wn *wrpc.WorkerRPCClient) error {
 
 // RmWorkerNode thread safely removes worker node from the pool
 // and changes state of the worker as disconnected
-func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
+func (mn *ManagementNode) RmWorkerNode(ctx context.Context, wn *wrpc.WorkerRPCClient) error {
 	mn.workerNodePoolMtx.Lock()
 
 	if _, ok := mn.workerNodePool[wn.WN.Id]; !ok {
@@ -89,10 +90,12 @@ func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
 	wn.WN.State = common.WorkerNodeStateDisconnected
 
 	mn.workerNodePoolMtx.Unlock()
-	err := mn.SetToDb(wn, EtcdWorkerPrefix+wn.WN.Id)
+	err := mn.SetToDb(ctx, wn, EtcdWorkerPrefix+wn.WN.Id)
 	if err != nil {
 		return trace.Wrap(err)
 	}
+
+	fmt.Println("heererere")
 
 	return nil
 }
@@ -101,6 +104,9 @@ func (mn *ManagementNode) RmWorkerNode(wn *wrpc.WorkerRPCClient) error {
 // management to worker node communication
 func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer) error {
 	log.Info("WorkerConnect is called")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// TBD NewWorkerNode func style
 	// creating worker node that has connected
@@ -113,7 +119,7 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 	// by architecture decision worker connects and send first
 	// message to via stream
 	// message have to contain its id in reply field
-	msg, err := wRPCClient.RxWithTimeout()
+	msg, err := wRPCClient.RxWithTimeout(ctx)
 	if err != nil {
 		common.PrintDebugErr(err)
 		return err
@@ -122,33 +128,36 @@ func (mn *ManagementNode) WorkerConnect(stream pb.Scheduler_WorkerConnectServer)
 	rsp := msg.(*pb.WorkerRsp)
 	wRPCClient.SetId(rsp.Reply)
 
-	err = mn.AddWorkerNode(wRPCClient)
+	err = mn.AddWorkerNode(ctx, wRPCClient)
 	if err != nil {
 		common.PrintDebugErr(err)
 		return nil
 	}
 
+	c, cancel := context.WithCancel(ctx)
+
 	// to make async communication between Worker and Manager
 	// because sending via stream is possible only synchronously
-	wRPCClient.StartSender()
+	wRPCClient.StartSender(c)
 
 	// launch pinger to check connection state
-	wRPCClient.StartPinger(mn.cfg.PingTimer)
+	wRPCClient.StartPinger(c, mn.cfg.PingTimer)
 
 	// launch main eventloop
-	if err := wRPCClient.InitLoop(); err != nil {
+	if err = wRPCClient.InitLoop(c); err != nil {
 		common.PrintDebugErr(err)
 	}
 
-	wRPCClient.StopPinger()
-	wRPCClient.StopSender()
+	rmErr := mn.RmWorkerNode(c, wRPCClient)
 
-	rmErr := mn.RmWorkerNode(wRPCClient)
 	if rmErr != nil {
 		//concat errors in case there are problems with db
 		err = trace.Errorf("%s %s", err.Error(), rmErr.Error())
 		common.PrintDebugErr(err)
 	}
+
+	wRPCClient.StopPinger()
+	wRPCClient.StopSender(cancel)
 
 	return err
 }
@@ -166,7 +175,7 @@ func (md *ManagementNode) GetWorkerList(ctx context.Context, req *pb.DummyReq) (
 		clientv3.WithPrefix(),
 	}
 
-	eCtx, cancel := context.WithTimeout(context.Background(),
+	eCtx, cancel := context.WithTimeout(ctx,
 		md.cfg.EtcdDialTimeout*time.Second)
 	gr, err := md.etcd.Get(eCtx, EtcdWorkerPrefix, opts...)
 	cancel()
@@ -202,7 +211,7 @@ func (md *ManagementNode) GetTaskList(ctx context.Context, req *pb.DummyReq) (*p
 		clientv3.WithPrefix(),
 	}
 
-	eCtx, cancel := context.WithTimeout(context.Background(),
+	eCtx, cancel := context.WithTimeout(ctx,
 		md.cfg.EtcdDialTimeout*time.Second)
 	gr, err := md.etcd.Get(eCtx, EtcdTaskPrefix, opts...)
 	cancel()
@@ -254,7 +263,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 			task.Id = uuid.New().String()
 		}
 
-		if err := md.setTasksToDb(req.Tasks); err != nil {
+		if err := md.setTasksToDb(ctx, req.Tasks); err != nil {
 			common.PrintDebugErr(err)
 			return nil, err
 		}
@@ -296,7 +305,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		task.State = common.TaskStatePending
 		task.WorkerId = workerId
 
-		if err := md.SetToDb(task, EtcdTaskPrefix+id); err != nil {
+		if err := md.SetToDb(ctx, task, EtcdTaskPrefix+id); err != nil {
 			common.PrintDebugErr(err)
 			return nil, err
 		}
@@ -304,13 +313,13 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 		// setup handlers
 		// copy object to handler
 		t := *task
-		onRspHandler := func(rsp *pb.WorkerRsp) {
+		onRspHandler := func(c context.Context, rsp *pb.WorkerRsp) {
 
 			// TBD: validate reply
 
 			t.State = rsp.Reply
 			var err error
-			if err = md.SetToDb(&t, EtcdTaskPrefix+t.Id); err != nil {
+			if err = md.SetToDb(ctx, &t, EtcdTaskPrefix+t.Id); err != nil {
 				common.PrintDebugErr(err)
 			}
 
@@ -341,15 +350,14 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 
 		// task is scheduled
 		// setup dead timeout
-		md.SetTaskAndRunDeadTimeout(&Task{
+		md.SetTaskAndRunDeadTimeout(ctx, &Task{
 			task: task,
-			stop: make(chan struct{}, 1),
 			cfg:  md.cfg,
 		})
 
 		// sending to worker node
 		md.workerNodePool[workerId].
-			SendWithHandlerTimeout(req, onRspHandler,
+			SendWithHandlerTimeout(ctx, req, onRspHandler,
 				onTimerExpiredHandler,
 				md.cfg.SilenceTimeout)
 	}
@@ -365,7 +373,7 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 
 			// set error to worker error field
 			m.task.WorkerError = m.err.Error()
-			if err := md.SetToDb(m.task, EtcdTaskPrefix+m.task.Id); err != nil {
+			if err := md.SetToDb(ctx, m.task, EtcdTaskPrefix+m.task.Id); err != nil {
 				common.PrintDebugErr(err)
 				return nil, err
 			}
@@ -383,13 +391,14 @@ func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.T
 }
 
 // SetToDb stores subj to etcd by id
-func (md *ManagementNode) SetToDb(subj interface{}, id string) error {
+func (md *ManagementNode) SetToDb(ctx context.Context,
+	subj interface{}, id string) error {
 	b, err := json.Marshal(subj)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(),
+	ctx, cancel := context.WithTimeout(ctx,
 		md.cfg.EtcdDialTimeout*time.Second)
 	_, err = md.etcd.Put(ctx, id, string(b))
 	cancel()
@@ -416,7 +425,7 @@ func (md *ManagementNode) SetTaskState(ctx context.Context, task *pb.Task) (*pb.
 		return nil, err
 	}
 
-	if err := md.SetToDb(task, EtcdTaskPrefix+task.Id); err != nil {
+	if err := md.SetToDb(ctx, task, EtcdTaskPrefix+task.Id); err != nil {
 		common.PrintDebugErr(err)
 		return nil, err
 	}
@@ -426,9 +435,10 @@ func (md *ManagementNode) SetTaskState(ctx context.Context, task *pb.Task) (*pb.
 
 // setTasksToDb is helper function for setting bunch of tasks
 // to etcd
-func (md *ManagementNode) setTasksToDb(tasks []*pb.Task) error {
+func (md *ManagementNode) setTasksToDb(ctx context.Context,
+	tasks []*pb.Task) error {
 	for _, task := range tasks {
-		err := md.SetToDb(task, EtcdTaskPrefix+task.Id)
+		err := md.SetToDb(ctx, task, EtcdTaskPrefix+task.Id)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -442,7 +452,10 @@ func (md *ManagementNode) setTasksToDb(tasks []*pb.Task) error {
 // task with pending and scheduled are all set to dead
 func (md *ManagementNode) PrepareZeroState() error {
 
-	tl, err := md.GetTaskList(context.Background(), &pb.DummyReq{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tl, err := md.GetTaskList(ctx, &pb.DummyReq{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -450,14 +463,14 @@ func (md *ManagementNode) PrepareZeroState() error {
 	for _, task := range tl.Tasks {
 		if task.State != common.TaskStateDone && task.State != common.TaskStateDead {
 			task.State = common.TaskStateDead
-			err := md.SetToDb(task, EtcdTaskPrefix+task.Id)
+			err := md.SetToDb(ctx, task, EtcdTaskPrefix+task.Id)
 			if err != nil {
 				return trace.Wrap(err)
 			}
 		}
 	}
 
-	wl, err := md.GetWorkerList(context.Background(), &pb.DummyReq{})
+	wl, err := md.GetWorkerList(ctx, &pb.DummyReq{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -470,7 +483,7 @@ func (md *ManagementNode) PrepareZeroState() error {
 				WN: worker,
 			}
 
-			err := md.SetToDb(wrapper, EtcdWorkerPrefix+worker.Id)
+			err := md.SetToDb(ctx, wrapper, EtcdWorkerPrefix+worker.Id)
 			if err != nil {
 				return trace.Wrap(err)
 			}
@@ -482,20 +495,22 @@ func (md *ManagementNode) PrepareZeroState() error {
 
 // SetTaskAndRunDeadTimeout sets task to the scheduled tasks
 // storage and setups the dead timeout for this task
-func (md *ManagementNode) SetTaskAndRunDeadTimeout(t *Task) {
+func (md *ManagementNode) SetTaskAndRunDeadTimeout(ctx context.Context,
+	t *Task) {
 	md.scheduledTasksMtx.Lock()
 
 	md.scheduledTasks[t.task.Id] = t
 
 	md.scheduledTasksMtx.Unlock()
 
-	t.StartDeadTimeout(func() {
-		t.task.State = common.TaskStateDead
-		err := md.SetToDb(t.task, EtcdTaskPrefix+t.task.Id)
-		if err != nil {
-			common.PrintDebugErr(err)
-		}
-	})
+	t.StartDeadTimeout(ctx,
+		func(ctx context.Context) {
+			t.task.State = common.TaskStateDead
+			err := md.SetToDb(ctx, t.task, EtcdTaskPrefix+t.task.Id)
+			if err != nil {
+				common.PrintDebugErr(err)
+			}
+		})
 }
 
 // StopTaskDeadTimeout stops the dead timeout of the task
