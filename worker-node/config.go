@@ -43,5 +43,8 @@ func parseClientCfgFile(filePath string) (*WorkerNodeConfig, error) {
 		return nil, trace.Wrap(err)
 	}
 
+	cfg.SilenceTimeout = cfg.SilenceTimeout * time.Second
+	cfg.ConnectionTimeout = cfg.ConnectionTimeout * time.Second
+
 	return &cfg, nil
 }

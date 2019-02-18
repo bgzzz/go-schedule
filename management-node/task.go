@@ -30,7 +30,7 @@ func (t *Task) StartDeadTimeout(ctx context.Context,
 	cb func(ctx context.Context)) {
 
 	go func() {
-		c, cancel := context.WithTimeout(ctx, t.cfg.DeadTimeout*time.Second)
+		c, cancel := context.WithTimeout(ctx, t.cfg.DeadTimeout)
 		defer cancel()
 
 		select {

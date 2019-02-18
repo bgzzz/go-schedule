@@ -37,5 +37,7 @@ func parseClientCfgFile(filePath string) (*SchedCtlConfig, error) {
 		return nil, trace.Wrap(err)
 	}
 
+	cfg.ConnectionTimeout = cfg.ConnectionTimeout * time.Second
+
 	return &cfg, nil
 }
