@@ -34,7 +34,7 @@ ping_timer: 5
 
 # max timeout that server waits for any message to be received or send 
 # if timeout expired connection is dropped 
-# silence_timeout has to be >= ping_timeout
+# silence_timeout has to be > ping_timeout
 # timeout is in seconds 
 silence_timeout: 10
 

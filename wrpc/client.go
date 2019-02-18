@@ -2,6 +2,7 @@ package wrpc
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -53,11 +54,11 @@ func NewWorkerNodeRPCClient(id string,
 func (wn *WorkerRPCClient) SendWithHandlerTimeout(ctx context.Context,
 	req pb.MgmtReq,
 	onRspHandler Callback,
-	onTimerExpiredHandler func(),
+	onTimerExpiredHandler func(ctx context.Context),
 	timeout time.Duration) {
 
 	go func() {
-		c, cancel := context.WithTimeout(ctx, timeout*time.Second)
+		c, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		// channel for connection between callback
 		// and on rsp go routine
@@ -84,7 +85,9 @@ func (wn *WorkerRPCClient) SendWithHandlerTimeout(ctx context.Context,
 				delete(wn.subscription, req.Id)
 				wn.subscriptionMtx.Unlock()
 
-				onTimerExpiredHandler()
+				cont, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				onTimerExpiredHandler(cont)
 			}
 		}
 	}()
@@ -107,7 +110,10 @@ func (wn *WorkerRPCClient) Send(ctx context.Context, req pb.MgmtReq, cb Callback
 	wn.subscription[req.Id] = cb
 	wn.subscriptionMtx.Unlock()
 
-	c, cancel := context.WithTimeout(ctx, wn.silenceTimeout*time.Second)
+	fmt.Println("wn.silenceTimeout")
+	fmt.Println(wn.silenceTimeout)
+
+	c, cancel := context.WithTimeout(ctx, wn.silenceTimeout)
 	defer cancel()
 
 	select {
@@ -155,7 +161,7 @@ func (wn *WorkerRPCClient) SetId(id string) {
 // StartPinger setups ticker and sends ping to worker on
 // every tick
 func (wn *WorkerRPCClient) StartPinger(ctx context.Context, d time.Duration) {
-	wn.pingTicker = time.NewTicker(d * time.Second)
+	wn.pingTicker = time.NewTicker(d)
 
 	log.Debug("Start pinger")
 	go func() {
@@ -176,7 +182,7 @@ func (wn *WorkerRPCClient) StartPinger(ctx context.Context, d time.Duration) {
 				return
 			}
 
-			onTimerExpiredHandler := func() {
+			onTimerExpiredHandler := func(c context.Context) {
 				err := trace.Errorf("pong is delayed for %s: closing connection for %s", req.Id, wn.WN.Id)
 				wn.SetErr(err)
 			}

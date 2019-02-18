@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
-	"time"
 
 	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
@@ -64,7 +63,7 @@ func ScheduleTasks(args []string, cfg *SchedCtlConfig) error {
 
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			cfg.ConnectionTimeout*time.Second)
+			cfg.ConnectionTimeout)
 
 		log.Debug("Calling Schedule RPC")
 		tl, err := client.Schedule(ctx, tl)
@@ -84,7 +83,7 @@ func ScheduleTasks(args []string, cfg *SchedCtlConfig) error {
 func ListTasks(cfg *SchedCtlConfig) error {
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			cfg.ConnectionTimeout*time.Second)
+			cfg.ConnectionTimeout)
 
 		log.Debug("Calling ListTasks RPC")
 		tl, err := client.GetTaskList(ctx, &pb.DummyReq{
@@ -109,7 +108,7 @@ func ListTasks(cfg *SchedCtlConfig) error {
 func ListWorkers(cfg *SchedCtlConfig) error {
 	return runRPC(func(client pb.SchedulerClient) error {
 		ctx, cancel := context.WithTimeout(context.Background(),
-			cfg.ConnectionTimeout*time.Second)
+			cfg.ConnectionTimeout)
 
 		log.Debug("Calling ListWorkers RPC")
 		wl, err := client.GetWorkerList(ctx, &pb.DummyReq{

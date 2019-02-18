@@ -70,6 +70,11 @@ func parseCfgFile(filePath string) (*ServerConfig, error) {
 		return nil, trace.Wrap(err)
 	}
 
+	cfg.EtcdDialTimeout = cfg.EtcdDialTimeout * time.Second
+	cfg.DeadTimeout = cfg.DeadTimeout * time.Second
+	cfg.PingTimer = cfg.PingTimer * time.Second
+	cfg.SilenceTimeout = cfg.SilenceTimeout * time.Second
+
 	return cfgValidate(&cfg)
 }
 

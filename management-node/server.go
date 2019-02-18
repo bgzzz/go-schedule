@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"math/rand"
 	"sync"
@@ -95,8 +94,6 @@ func (mn *ManagementNode) RmWorkerNode(ctx context.Context, wn *wrpc.WorkerRPCCl
 		return trace.Wrap(err)
 	}
 
-	fmt.Println("heererere")
-
 	return nil
 }
 
@@ -176,7 +173,7 @@ func (md *ManagementNode) GetWorkerList(ctx context.Context, req *pb.DummyReq) (
 	}
 
 	eCtx, cancel := context.WithTimeout(ctx,
-		md.cfg.EtcdDialTimeout*time.Second)
+		md.cfg.EtcdDialTimeout)
 	gr, err := md.etcd.Get(eCtx, EtcdWorkerPrefix, opts...)
 	cancel()
 	if err != nil {
@@ -212,7 +209,7 @@ func (md *ManagementNode) GetTaskList(ctx context.Context, req *pb.DummyReq) (*p
 	}
 
 	eCtx, cancel := context.WithTimeout(ctx,
-		md.cfg.EtcdDialTimeout*time.Second)
+		md.cfg.EtcdDialTimeout)
 	gr, err := md.etcd.Get(eCtx, EtcdTaskPrefix, opts...)
 	cancel()
 	if err != nil {
@@ -242,152 +239,191 @@ func (md *ManagementNode) GetTaskList(ctx context.Context, req *pb.DummyReq) (*p
 // stored in db with pending state -> send to worker -> rxed confirmation ->
 // change state to scheduled , start dead timer -> store in db -> return
 // TBD: function is too big, split on smaller parts
+
+// change it like this
+// store in db and return
+// send to workers
+// store in db
+// rx timoeout or call
+// store in db
 func (md *ManagementNode) Schedule(ctx context.Context, req *pb.TaskList) (*pb.TaskList, error) {
+	for _, task := range req.Tasks {
+		task.State = common.TaskStatePending
+		task.Id = uuid.New().String()
+	}
+
+	if err := md.setTasksToDb(ctx, req.Tasks); err != nil {
+		common.PrintDebugErr(err)
+		return nil, err
+	}
+
+	go md.schedule(req.Tasks)
+
+	return req, nil
+}
+
+func (md *ManagementNode) setTasksDead(ctx context.Context, tasks []*pb.Task) {
+	for _, task := range tasks {
+		task.State = common.TaskStateDead
+		task.Id = uuid.New().String()
+
+		if err := md.SetToDb(ctx, task, EtcdTaskPrefix+task.Id); err != nil {
+			common.PrintDebugErr(err)
+			return
+		}
+
+	}
+}
+
+func (md *ManagementNode) schedule(tasks []*pb.Task) {
+	// get workers
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	workers, err := md.GetWorkerList(ctx, &pb.DummyReq{})
+	if err != nil {
+		common.PrintDebugErr(err)
+		return
+	}
+
+	activeNodes := []*pb.WorkerNode{}
+	for _, node := range workers.Nodes {
+		if node.State == common.WorkerNodeStateConnected {
+			activeNodes = append(activeNodes, node)
+		}
+	}
+
+	if len(activeNodes) == 0 {
+		log.Warning("There are no connected workers: all tasks are dead")
+		md.setTasksDead(ctx, tasks)
+		return
+	}
+
+	// choose workers to execurte the task
+	for i, task := range tasks {
+
+		worker := activeNodes[0]
+		switch md.cfg.SchedulerAlgo {
+		case SchedAlgoRR:
+			{
+				worker = activeNodes[int(math.
+					Mod(float64(i),
+						float64(len(activeNodes))))]
+			}
+		case SchedAlgoRand:
+			{
+				s := rand.NewSource(time.Now().UnixNano())
+				r := rand.New(s)
+
+				worker = activeNodes[r.Intn(len(activeNodes))]
+			}
+		default:
+			{
+				log.Error("Unsupported scheduling algorithm is used")
+				return
+			}
+		}
+
+		task.WorkerId = worker.Id
+
+		// setDb
+		if err := md.SetToDb(ctx, task, EtcdTaskPrefix+task.Id); err != nil {
+			common.PrintDebugErr(err)
+			return
+		}
+
+		// execute worker
+		go md.executeWorker(*task)
+	}
+
+}
+
+func (md *ManagementNode) executeWorker(t pb.Task) {
+
+	ctx := context.Background()
+
+	// start timer
+	// setup dead timeout
+	md.SetTaskAndRunDeadTimeout(ctx, &Task{
+		task: &t,
+		cfg:  md.cfg,
+		rxed: make(chan struct{}),
+	})
+
+	// handlers
+	onRspHandler := func(c context.Context, rsp *pb.WorkerRsp) {
+
+		// TBD: validate reply
+
+		t.State = rsp.Reply
+		if err := md.SetToDb(c, &t, EtcdTaskPrefix+t.Id); err != nil {
+			common.PrintDebugErr(err)
+		}
+	}
+
+	onTimerExpiredHandler := func(c context.Context) {
+		err := trace.Errorf("timer is expired for rsp on task %s", t.Id)
+		common.PrintDebugErr(err)
+
+		if err := md.StopTaskDeadTimeout(t.Id); err != nil {
+			common.PrintDebugErr(err)
+		}
+
+		md.DelTask(t.Id)
+
+		t.State = common.TaskStateDead
+		t.WorkerError = trace.DebugReport(err)
+
+		if err := md.SetToDb(c, &t, EtcdTaskPrefix+t.Id); err != nil {
+			common.PrintDebugErr(err)
+		}
+	}
+
 	md.workerNodePoolMtx.RLock()
 	defer md.workerNodePoolMtx.RUnlock()
 
-	//make slice of connected workers
-	var workers []string
-	for k, _ := range md.workerNodePool {
-		workers = append(workers, k)
+	//check if it still active
+	worker, ok := md.workerNodePool[t.WorkerId]
+	if !ok {
+		md.taskScheduledOnDisconnectedWorker(ctx, worker, t)
+		return
 	}
 
-	// if no connected workers set state of tasks requested to schedule to
-	// dead
-	// TBD: make it in waiting for active workers to be scheduled
-	if len(workers) == 0 {
+	// prepare req
+	// combine parameters with cmd definition
+	params := append([]string{t.Cmd}, t.Parameters...)
 
-		log.Warning("There are no connected workers: all tasks are dead")
-		for _, task := range req.Tasks {
-			task.State = common.TaskStateDead
-			task.Id = uuid.New().String()
-		}
+	// prepare request
+	req := pb.MgmtReq{
+		Id:     t.Id,
+		Method: common.WorkerNodeRPCExec,
+		Params: params,
+	}
 
-		if err := md.setTasksToDb(ctx, req.Tasks); err != nil {
+	worker.SendWithHandlerTimeout(ctx, req, onRspHandler,
+		onTimerExpiredHandler,
+		md.cfg.SilenceTimeout)
+}
+
+func (md *ManagementNode) taskScheduledOnDisconnectedWorker(ctx context.Context, w *wrpc.WorkerRPCClient, t pb.Task) {
+	err := trace.Errorf("Worker is not active %s", w.WN.Id)
+	common.PrintDebugErr(err)
+
+	if err := md.StopTaskDeadTimeout(t.Id); err != nil {
+		common.PrintDebugErr(err)
+	}
+
+	md.DelTask(t.Id)
+
+	t.State = common.TaskStateDead
+	t.WorkerError = trace.DebugReport(err)
+
+	go func(c context.Context) {
+		if err := md.SetToDb(c, &t, EtcdTaskPrefix+t.Id); err != nil {
 			common.PrintDebugErr(err)
-			return nil, err
 		}
-
-		return req, nil
-	}
-
-	// msg type for internal use
-	type msg struct {
-		err  error
-		task *pb.Task
-	}
-
-	// channel for connecting onRsp handlers
-	// to the current go routine
-	messanger := make(chan msg, 1)
-
-	for i, task := range req.Tasks {
-
-		// all the ids are generated by management node
-		id := uuid.New().String()
-		workerId := workers[0]
-
-		// RR worker id calculation
-		if md.cfg.SchedulerAlgo == SchedAlgoRR {
-			workerId = workers[int(math.
-				Mod(float64(i),
-					float64(len(workers))))]
-		} else if md.cfg.SchedulerAlgo == SchedAlgoRand {
-			s := rand.NewSource(time.Now().UnixNano())
-			r := rand.New(s)
-
-			workerId = workers[r.Intn(len(workers))]
-
-		}
-
-		// set task state to pending
-		task.Id = id
-		task.State = common.TaskStatePending
-		task.WorkerId = workerId
-
-		if err := md.SetToDb(ctx, task, EtcdTaskPrefix+id); err != nil {
-			common.PrintDebugErr(err)
-			return nil, err
-		}
-
-		// setup handlers
-		// copy object to handler
-		t := *task
-		onRspHandler := func(c context.Context, rsp *pb.WorkerRsp) {
-
-			// TBD: validate reply
-
-			t.State = rsp.Reply
-			var err error
-			if err = md.SetToDb(ctx, &t, EtcdTaskPrefix+t.Id); err != nil {
-				common.PrintDebugErr(err)
-			}
-
-			messanger <- msg{
-				task: &t,
-				err:  err,
-			}
-		}
-
-		onTimerExpiredHandler := func() {
-			err := fmt.Errorf("timer is expired for rsp on task %s", task.Id)
-			common.PrintDebugErr(err)
-			messanger <- msg{
-				err:  err,
-				task: &t,
-			}
-		}
-
-		// combine parameters with cmd definition
-		params := append([]string{task.Cmd}, task.Parameters...)
-
-		// prepare request
-		req := pb.MgmtReq{
-			Id:     task.Id,
-			Method: common.WorkerNodeRPCExec,
-			Params: params,
-		}
-
-		// task is scheduled
-		// setup dead timeout
-		md.SetTaskAndRunDeadTimeout(ctx, &Task{
-			task: task,
-			cfg:  md.cfg,
-		})
-
-		// sending to worker node
-		md.workerNodePool[workerId].
-			SendWithHandlerTimeout(ctx, req, onRspHandler,
-				onTimerExpiredHandler,
-				md.cfg.SilenceTimeout)
-	}
-
-	// prepare task objects to response to schedctl
-	tasks := []*pb.Task{}
-	for _ = range req.Tasks {
-		m := <-messanger
-
-		// check if it responded with error
-		if m.err != nil {
-			common.PrintDebugErr(m.err)
-
-			// set error to worker error field
-			m.task.WorkerError = m.err.Error()
-			if err := md.SetToDb(ctx, m.task, EtcdTaskPrefix+m.task.Id); err != nil {
-				common.PrintDebugErr(err)
-				return nil, err
-			}
-			tasks = append(tasks, m.task)
-			continue
-		}
-
-		tasks = append(tasks, m.task)
-	}
-
-	close(messanger)
-
-	return &pb.TaskList{Tasks: tasks}, nil
-
+	}(ctx)
+	return
 }
 
 // SetToDb stores subj to etcd by id
@@ -398,9 +434,9 @@ func (md *ManagementNode) SetToDb(ctx context.Context,
 		return trace.Wrap(err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx,
-		md.cfg.EtcdDialTimeout*time.Second)
-	_, err = md.etcd.Put(ctx, id, string(b))
+	c, cancel := context.WithTimeout(ctx,
+		md.cfg.EtcdDialTimeout)
+	_, err = md.etcd.Put(c, id, string(b))
 	cancel()
 	if err != nil {
 		return trace.Wrap(err)
@@ -510,6 +546,8 @@ func (md *ManagementNode) SetTaskAndRunDeadTimeout(ctx context.Context,
 			if err != nil {
 				common.PrintDebugErr(err)
 			}
+
+			md.DelTask(EtcdTaskPrefix + t.task.Id)
 		})
 }
 
@@ -518,12 +556,11 @@ func (md *ManagementNode) SetTaskAndRunDeadTimeout(ctx context.Context,
 func (md *ManagementNode) StopTaskDeadTimeout(id string) error {
 
 	md.scheduledTasksMtx.RLock()
-	md.scheduledTasksMtx.RUnlock()
+	defer md.scheduledTasksMtx.RUnlock()
 
 	task, ok := md.scheduledTasks[id]
 	if !ok {
-		err := fmt.Errorf("There is no task %s in the scheduled task storage", id)
-		return trace.Wrap(err)
+		return trace.Errorf("There is no task %s in the scheduled task storage", id)
 	}
 
 	task.StopDeadTimeout()

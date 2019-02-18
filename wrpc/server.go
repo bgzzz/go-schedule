@@ -81,7 +81,7 @@ func (wrpc *WorkerRPCServer) execute(ctx context.Context, req *pb.MgmtReq) {
 
 	// task is done setting task state to management node
 	c, cancel := context.WithTimeout(ctx,
-		wrpc.silenceTimeout*time.Second)
+		wrpc.silenceTimeout)
 	_, err := wrpc.client.SetTaskState(c, &task)
 	cancel()
 
@@ -132,7 +132,7 @@ func (wrpc *WorkerRPCServer) ProcessRequest(ctx context.Context, r interface{}) 
 }
 
 func (wrpc *WorkerRPCServer) Send(ctx context.Context, rsp *pb.WorkerRsp) {
-	c, cancel := context.WithTimeout(ctx, wrpc.silenceTimeout*time.Second)
+	c, cancel := context.WithTimeout(ctx, wrpc.silenceTimeout)
 	defer cancel()
 
 	select {

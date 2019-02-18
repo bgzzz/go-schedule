@@ -92,12 +92,13 @@ func (w *Worker) RxWithTimeout(ctx context.Context) (interface{}, error) {
 		close(msgChan)
 	}()
 
-	c, cancel := context.WithTimeout(ctx, w.silenceTimeout*time.Second)
+	fmt.Println(w.silenceTimeout)
+	c, cancel := context.WithTimeout(ctx, w.silenceTimeout)
 	defer cancel()
 
 	select {
 	case <-c.Done():
-		return nil, trace.Errorf("timer for rx of " + string(w.silenceTimeout) + " expired")
+		return nil, trace.Errorf("timer for rx of %d expired", w.silenceTimeout)
 	case msg := <-msgChan:
 		return msg.msg, trace.Wrap(msg.err)
 	}
@@ -114,7 +115,7 @@ func (w *Worker) SendWithTimeout(ctx context.Context, msg interface{}) error {
 		close(errChan)
 	}()
 
-	c, cancel := context.WithTimeout(ctx, w.silenceTimeout*time.Second)
+	c, cancel := context.WithTimeout(ctx, w.silenceTimeout)
 	defer cancel()
 
 	select {

@@ -4,7 +4,6 @@ import (
 	"flag"
 	"net"
 	"os"
-	"time"
 
 	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
@@ -50,7 +49,7 @@ func main() {
 
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{cfg.EtcdAddress},
-		DialTimeout: cfg.EtcdDialTimeout * time.Second,
+		DialTimeout: cfg.EtcdDialTimeout,
 	})
 	if err != nil {
 		common.PrintDebugErr(err)
