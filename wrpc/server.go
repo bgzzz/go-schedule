@@ -3,7 +3,6 @@ package wrpc
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
 	"sync"
 	"time"
@@ -97,7 +96,7 @@ func (wrpc *WorkerRPCServer) ProcessRequest(ctx context.Context, r interface{}) 
 	case common.WorkerNodeRPCExec:
 		{
 			go func() {
-				fmt.Printf("Executing %s with params %+v\n", req.Method, req.Params)
+				log.Debugf("Executing %s with params %+v\n", req.Method, req.Params)
 
 				rsp := &pb.WorkerRsp{
 					Id:    req.Id,

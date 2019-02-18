@@ -2,7 +2,6 @@ package wrpc
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -109,9 +108,6 @@ func (wn *WorkerRPCClient) Send(ctx context.Context, req pb.MgmtReq, cb Callback
 	wn.subscriptionMtx.Lock()
 	wn.subscription[req.Id] = cb
 	wn.subscriptionMtx.Unlock()
-
-	fmt.Println("wn.silenceTimeout")
-	fmt.Println(wn.silenceTimeout)
 
 	c, cancel := context.WithTimeout(ctx, wn.silenceTimeout)
 	defer cancel()

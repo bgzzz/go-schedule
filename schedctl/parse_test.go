@@ -4,6 +4,7 @@ package main
 
 import (
 	"testing"
+	"time"
 )
 
 func TestHelpCheckErr(t *testing.T) {
@@ -61,7 +62,11 @@ func TestParseCmdErr(t *testing.T) {
 	target := "some"
 	args := []string{}
 
-	if err := parseCmd(target, args); err == nil {
+	cfg := &SchedCtlConfig{
+		ConnectionTimeout: 5 * time.Second,
+	}
+
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
@@ -69,7 +74,7 @@ func TestParseCmdErr(t *testing.T) {
 	target = "some"
 	args = []string{"help"}
 
-	if err := parseCmd(target, args); err == nil {
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
@@ -77,7 +82,7 @@ func TestParseCmdErr(t *testing.T) {
 	target = "schedctl"
 	args = []string{"workers"}
 
-	if err := parseCmd(target, args); err == nil {
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
@@ -85,7 +90,7 @@ func TestParseCmdErr(t *testing.T) {
 	target = "schedctl"
 	args = []string{"tasks"}
 
-	if err := parseCmd(target, args); err == nil {
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
@@ -93,7 +98,7 @@ func TestParseCmdErr(t *testing.T) {
 	target = "tasks"
 	args = []string{"tasks"}
 
-	if err := parseCmd(target, args); err == nil {
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
@@ -101,7 +106,7 @@ func TestParseCmdErr(t *testing.T) {
 	target = "workers"
 	args = []string{"schedule"}
 
-	if err := parseCmd(target, args); err == nil {
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
@@ -109,7 +114,7 @@ func TestParseCmdErr(t *testing.T) {
 	target = "schedctl"
 	args = []string{"ls"}
 
-	if err := parseCmd(target, args); err == nil {
+	if err := parseCmd(target, args, cfg); err == nil {
 		t.Errorf("Ther should be an error with this args %+v and target %s ",
 			args, target)
 	}
