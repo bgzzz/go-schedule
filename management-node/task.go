@@ -28,7 +28,6 @@ type Task struct {
 // and runs cb when expired
 func (t *Task) StartDeadTimeout(ctx context.Context,
 	cb func(ctx context.Context)) {
-
 	go func() {
 		c, cancel := context.WithTimeout(ctx, t.cfg.DeadTimeout)
 		defer cancel()
@@ -47,16 +46,19 @@ func (t *Task) StartDeadTimeout(ctx context.Context,
 }
 
 // StopDeadTimeout stops dead timeout for task
-func (t *Task) StopDeadTimeout() {
+func (t *Task) StopDeadTimeout(ctx context.Context) {
+	c, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	select {
 	case t.rxed <- struct{}{}:
 		{
 			log.Debugf("Dead timeout is stopped for task %s",
 				t.task.Id)
 		}
-	default:
+	case <-c.Done():
 		{
-			log.Warningf("Blocked dead timeout stop for task %s", t.task.Id)
+			log.Warningf("context declined for task %s", t.task.Id)
 		}
 	}
 }

@@ -5,12 +5,17 @@ package main
 import (
 	"io/ioutil"
 	"testing"
+	"time"
 )
+
+var cfg = &SchedCtlConfig{
+	ConnectionTimeout: 5 * time.Second,
+}
 
 func TestScheduleTasksErrorArgs(t *testing.T) {
 	args := []string{"tasks"}
 
-	if err := ScheduleTasks(args); err == nil {
+	if err := ScheduleTasks(args, cfg); err == nil {
 		t.Errorf("There should be an error with this args %+v", args)
 	}
 }
@@ -18,7 +23,7 @@ func TestScheduleTasksErrorArgs(t *testing.T) {
 func TestScheduleTasksErrorArgsFilePointer(t *testing.T) {
 	args := []string{"tasks", "--file"}
 
-	if err := ScheduleTasks(args); err == nil {
+	if err := ScheduleTasks(args, cfg); err == nil {
 		t.Errorf("There should be an error with this args %+v", args)
 	}
 }
@@ -26,7 +31,7 @@ func TestScheduleTasksErrorArgsFilePointer(t *testing.T) {
 func TestScheduleTasksErrorArgsFileNotExist(t *testing.T) {
 	args := []string{"--file", "--file"}
 
-	if err := ScheduleTasks(args); err == nil {
+	if err := ScheduleTasks(args, cfg); err == nil {
 		t.Errorf("There should be an error with this args %+v", args)
 	}
 }
@@ -56,7 +61,7 @@ func TestScheduleTasksErrorWrongFileStruct(t *testing.T) {
 
 	args := []string{"-f", "./TestScheduleTasksErrorWrongFileStruct.yaml"}
 
-	if err := ScheduleTasks(args); err == nil {
+	if err := ScheduleTasks(args, cfg); err == nil {
 		t.Errorf("There should be an error with this yaml %+v", string(data))
 	}
 }

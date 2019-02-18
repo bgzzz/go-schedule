@@ -4,15 +4,16 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/bgzzz/go-schedule/common"
 )
 
 func TestConfigValidate(t *testing.T) {
 	cfg := ServerConfig{
-		DeadTimeout:      90,
-		SilenceTimeout:   10,
-		PingTimer:        5,
+		DeadTimeout:      90 * time.Second,
+		SilenceTimeout:   10 * time.Second,
+		PingTimer:        5 * time.Second,
 		SchedulerAlgo:    "rr",
 		ListeningAddress: "127.0.0.1:1234",
 		EtcdAddress:      "127.0.0.1:1235",
@@ -20,10 +21,10 @@ func TestConfigValidate(t *testing.T) {
 			LogLvl:  "debug",
 			LogPath: "/some/path",
 		},
-		DialTimeout: 5,
+		EtcdDialTimeout: 5 * time.Second,
 	}
 
-	err := cfgValidate(&cfg)
+	_, err := cfgValidate(&cfg)
 	if err != nil {
 		t.Errorf("Non nil error %s", err.Error())
 	}
@@ -31,9 +32,9 @@ func TestConfigValidate(t *testing.T) {
 
 func TestConfigValidateWithTimers(t *testing.T) {
 	cfg := ServerConfig{
-		DeadTimeout:      90,
-		SilenceTimeout:   10,
-		PingTimer:        55,
+		DeadTimeout:      90 * time.Second,
+		SilenceTimeout:   10 * time.Second,
+		PingTimer:        55 * time.Second,
 		SchedulerAlgo:    "rr",
 		ListeningAddress: "127.0.0.1:1234",
 		EtcdAddress:      "127.0.0.1:1235",
@@ -41,25 +42,21 @@ func TestConfigValidateWithTimers(t *testing.T) {
 			LogLvl:  "debug",
 			LogPath: "/some/path",
 		},
-		DialTimeout: 5,
+		EtcdDialTimeout: 5 * time.Second,
 	}
 
-	err := cfgValidate(&cfg)
-	if err != nil {
-		t.Errorf("Non nil error %s", err.Error())
+	_, err := cfgValidate(&cfg)
+	if err == nil {
+		t.Errorf("Should be en error because ping timer > silence timer")
 	}
 
-	if cfg.SilenceTimeout != cfg.PingTimer {
-		t.Errorf("silence timeout != ping timeout (%d != %d)",
-			cfg.SilenceTimeout, cfg.PingTimer)
-	}
 }
 
 func TestConfigValidateWrongAlgo(t *testing.T) {
 	cfg := ServerConfig{
-		DeadTimeout:      90,
-		SilenceTimeout:   10,
-		PingTimer:        55,
+		DeadTimeout:      90 * time.Second,
+		SilenceTimeout:   10 * time.Second,
+		PingTimer:        55 * time.Second,
 		SchedulerAlgo:    "some",
 		ListeningAddress: "127.0.0.1:1234",
 		EtcdAddress:      "127.0.0.1:1235",
@@ -67,10 +64,10 @@ func TestConfigValidateWrongAlgo(t *testing.T) {
 			LogLvl:  "debug",
 			LogPath: "/some/path",
 		},
-		DialTimeout: 5,
+		EtcdDialTimeout: 5 * time.Second,
 	}
 
-	err := cfgValidate(&cfg)
+	_, err := cfgValidate(&cfg)
 	if err == nil {
 		t.Errorf("Nil error for config with algo %+v", cfg)
 	}

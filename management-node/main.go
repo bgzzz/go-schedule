@@ -7,7 +7,6 @@ import (
 
 	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
-	"github.com/bgzzz/go-schedule/wrpc"
 
 	"github.com/coreos/etcd/clientv3"
 	log "github.com/sirupsen/logrus"
@@ -59,15 +58,9 @@ func main() {
 	// channel for blocking main
 	stop := make(chan struct{})
 
-	// TBD: change to NewManagementNode function style
 	// creating grpc server
 	s := grpc.NewServer()
-	mn := &ManagementNode{
-		etcd:           cli,
-		workerNodePool: make(map[string]*wrpc.WorkerRPCClient),
-		scheduledTasks: make(map[string]*Task),
-		cfg:            cfg,
-	}
+	mn := NewManagmentNode(cli, cfg)
 
 	// setting stated on db objects
 	// tasks have to be dead or done

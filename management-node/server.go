@@ -39,6 +39,15 @@ type ManagementNode struct {
 	cfg *ServerConfig
 }
 
+func NewManagmentNode(cli *clientv3.Client, cfg *ServerConfig) *ManagementNode {
+	return &ManagementNode{
+		etcd:           cli,
+		workerNodePool: make(map[string]*wrpc.WorkerRPCClient),
+		scheduledTasks: make(map[string]*Task),
+		cfg:            cfg,
+	}
+}
+
 // Etcd prefixes that are used for storing the objects to
 // etcd
 const (
@@ -365,7 +374,7 @@ func (md *ManagementNode) executeWorker(t pb.Task) {
 		err := trace.Errorf("timer is expired for rsp on task %s", t.Id)
 		common.PrintDebugErr(err)
 
-		if err := md.StopTaskDeadTimeout(t.Id); err != nil {
+		if err := md.StopTaskDeadTimeout(c, t.Id); err != nil {
 			common.PrintDebugErr(err)
 		}
 
@@ -409,7 +418,7 @@ func (md *ManagementNode) taskScheduledOnDisconnectedWorker(ctx context.Context,
 	err := trace.Errorf("Worker is not active %s", w.WN.Id)
 	common.PrintDebugErr(err)
 
-	if err := md.StopTaskDeadTimeout(t.Id); err != nil {
+	if err := md.StopTaskDeadTimeout(ctx, t.Id); err != nil {
 		common.PrintDebugErr(err)
 	}
 
@@ -456,7 +465,7 @@ func (md *ManagementNode) SetTaskState(ctx context.Context, task *pb.Task) (*pb.
 
 	log.Infof("SetTaskState with params %+v", task)
 
-	if err := md.StopTaskDeadTimeout(task.Id); err != nil {
+	if err := md.StopTaskDeadTimeout(ctx, task.Id); err != nil {
 		common.PrintDebugErr(err)
 		return nil, err
 	}
@@ -553,7 +562,7 @@ func (md *ManagementNode) SetTaskAndRunDeadTimeout(ctx context.Context,
 
 // StopTaskDeadTimeout stops the dead timeout of the task
 // with id
-func (md *ManagementNode) StopTaskDeadTimeout(id string) error {
+func (md *ManagementNode) StopTaskDeadTimeout(ctx context.Context, id string) error {
 
 	md.scheduledTasksMtx.RLock()
 	defer md.scheduledTasksMtx.RUnlock()
@@ -563,7 +572,7 @@ func (md *ManagementNode) StopTaskDeadTimeout(id string) error {
 		return trace.Errorf("There is no task %s in the scheduled task storage", id)
 	}
 
-	task.StopDeadTimeout()
+	task.StopDeadTimeout(ctx)
 
 	return nil
 
