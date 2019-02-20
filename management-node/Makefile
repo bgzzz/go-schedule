@@ -14,3 +14,7 @@ clean:
 test-unit:
 	go test -tags=unit -v
 
+# run integrational tests locally
+test-int:
+	go test -tags=int -v
+

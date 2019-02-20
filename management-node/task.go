@@ -22,7 +22,13 @@ type Task struct {
 	cfg *ServerConfig
 }
 
-//TBD: Add new task function
+func NewTask(task *pb.Task, cfg *ServerConfig) *Task {
+	return &Task{
+		task: task,
+		cfg:  cfg,
+		rxed: make(chan struct{}),
+	}
+}
 
 // StartDeadTimeout start timeout
 // and runs cb when expired
