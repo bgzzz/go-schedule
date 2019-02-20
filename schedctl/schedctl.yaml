@@ -1,0 +1,34 @@
+## basic_config common for all parts of the 
+# solution 
+basic_config:
+  # level of the information messages to be shown
+  # debug
+  # fatal
+  # info 
+  # error 
+  # more information can be found here
+  # https://github.com/sirupsen/logrus 
+  log_level: debug
+
+  # set the output to stdout
+  stdout: true 
+
+  # path of the log file where to store log 
+  # if stdout set to true then log is written 
+  # both to stdout and file  
+  log_path: log.log
+
+  # path of the tmp file storage 
+  tmp_path: .
+
+# specific solution's part configuration 
+
+## rpc connection timeouts configuration
+# server_address determines to which address and port
+# schedctl will be connecting 
+server_address: 127.0.0.1:1234
+
+# max timeout that schedctl waits connection to 
+# management node
+# timeout is in seconds 
+connection_timeout: 10
