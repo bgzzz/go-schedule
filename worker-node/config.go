@@ -27,6 +27,9 @@ type WorkerNodeConfig struct {
 	ConnectionTimeout time.Duration `yaml:"connetion_timeout"`
 
 	SilenceTimeout time.Duration `yaml:"silence_timeout"`
+
+	// ReconnectTimeout is a period between connection retries
+	ReconnectTimeout time.Duration `yaml:"reconnect_timeout"`
 }
 
 // parseClientCfgFile parses config yaml file to
@@ -45,6 +48,7 @@ func parseClientCfgFile(filePath string) (*WorkerNodeConfig, error) {
 
 	cfg.SilenceTimeout = cfg.SilenceTimeout * time.Second
 	cfg.ConnectionTimeout = cfg.ConnectionTimeout * time.Second
+	cfg.ReconnectTimeout = cfg.ReconnectTimeout * time.Second
 
 	return &cfg, nil
 }

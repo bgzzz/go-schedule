@@ -92,7 +92,6 @@ func (w *Worker) RxWithTimeout(ctx context.Context) (interface{}, error) {
 		close(msgChan)
 	}()
 
-	fmt.Println(w.silenceTimeout)
 	c, cancel := context.WithTimeout(ctx, w.silenceTimeout)
 	defer cancel()
 
