@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"github.com/bgzzz/go-schedule/common"
 	pb "github.com/bgzzz/go-schedule/proto"
 
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -38,16 +40,22 @@ func main() {
 
 	// Set up a connection to the server.
 
-	conn, err := grpc.Dial(cfg.ServerAddress, grpc.WithInsecure())
-	if err != nil {
-		common.PrintDebugErr(err)
-		os.Exit(3)
-	}
-	defer conn.Close()
-	client := pb.NewSchedulerClient(conn)
+	for {
+		conn, err := grpc.Dial(cfg.ServerAddress, grpc.WithInsecure())
+		if err != nil {
+			common.PrintDebugErr(err)
+			os.Exit(3)
+		}
+		client := pb.NewSchedulerClient(conn)
 
-	if err := RunWorkerRPCServer(client, cfg); err != nil {
-		common.PrintDebugErr(err)
+		if err := RunWorkerRPCServer(client, cfg); err != nil {
+			common.PrintDebugErr(err)
+		}
+
+		conn.Close()
+
+		log.Info("Reconnecting ...")
+		time.Sleep(cfg.ReconnectTimeout)
 	}
 
 }

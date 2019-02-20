@@ -35,3 +35,6 @@ silence_timeout: 10
 # management node with non bidirectional stream 
 # connections
 connection_timeout: 5  
+
+# period between connection retries in seconds
+reconnect_timeout: 3
