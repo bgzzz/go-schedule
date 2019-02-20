@@ -34,6 +34,10 @@ run-unit-tests: \
 	proto \
 	run-unit-tests-only
 
+# locally run integration tests
+run-int-tests: \
+	test-int-management-node
+
 # make it a different target for the purpose of 
 # running in docker if needed 
 run-unit-tests-only: \
@@ -50,6 +54,10 @@ test-unit-worker-node:
 
 test-unit-schedctl: 
 	make test-unit -C schedctl/
+
+## run integrational tests for solution parts
+test-int-management-node:
+	make test-int -C management-node/
 
 # cleaning locally saved binary 
 clean: \

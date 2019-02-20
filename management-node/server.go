@@ -285,7 +285,7 @@ func (md *ManagementNode) setTasksDead(ctx context.Context, tasks []*pb.Task) {
 }
 
 func (md *ManagementNode) schedule(tasks []*pb.Task) {
-	// get workers
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -308,7 +308,7 @@ func (md *ManagementNode) schedule(tasks []*pb.Task) {
 		return
 	}
 
-	// choose workers to execurte the task
+	// choose workers to execute the task
 	for i, task := range tasks {
 
 		worker := activeNodes[0]
